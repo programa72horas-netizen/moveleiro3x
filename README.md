@@ -82,8 +82,8 @@ const CONFIG = {
 | `index.html` | Estrutura das telas (cadastro, ingresso, portaria, painel) |
 | `styles.css` | Tema escuro do evento |
 | `app.js` | Lógica do app e configuração do evento |
-| `assets/qrcode.js` | Geração de QR Code ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT) |
-| `assets/html5-qrcode.min.js` | Leitura de QR Code pela câmera ([html5-qrcode](https://github.com/mebjas/html5-qrcode), Apache-2.0) |
+| `qrcode.js` | Geração de QR Code ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT) |
+| `html5-qrcode.min.js` | Leitura de QR Code pela câmera ([html5-qrcode](https://github.com/mebjas/html5-qrcode), Apache-2.0) |
 
 As bibliotecas estão salvas no repositório (sem CDN), então o app continua
 funcionando mesmo com internet instável no local do evento.

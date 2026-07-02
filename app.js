@@ -98,7 +98,9 @@ function salvarCheckin(c) {
 
 /* ------------------------------- QR Code --------------------------------- */
 // qrcode-generator usa latin-1 por padrão; nomes com acento precisam de UTF-8
-qrcode.stringToBytes = (s) => Array.from(new TextEncoder().encode(s));
+if (typeof qrcode !== 'undefined') {
+  qrcode.stringToBytes = (s) => Array.from(new TextEncoder().encode(s));
+}
 
 function payloadDoTicket(t) {
   return CONFIG.QR_PREFIXO + JSON.stringify({
@@ -727,4 +729,20 @@ function renderHourly(todos) {
 }
 
 /* -------------------------------- Início --------------------------------- */
+// Se algum arquivo do app não carregou, avisa em vez de mostrar página em branco
+(function verificarArquivos() {
+  const faltando = [];
+  if (typeof qrcode === 'undefined') faltando.push('qrcode.js');
+  if (typeof Html5Qrcode === 'undefined') faltando.push('html5-qrcode.min.js');
+  if (faltando.length) {
+    const aviso = document.createElement('div');
+    aviso.style.cssText =
+      'background:#d03b3b;color:#fff;padding:12px 16px;text-align:center;font-size:14px';
+    aviso.textContent =
+      'Atenção: arquivo(s) não carregado(s): ' + faltando.join(', ') +
+      '. Verifique se TODOS os arquivos do aplicativo foram publicados juntos.';
+    document.body.prepend(aviso);
+  }
+})();
+
 rota();
