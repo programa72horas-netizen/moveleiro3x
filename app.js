@@ -357,16 +357,25 @@ function renderMeusIngressos() {
     return;
   }
   el.innerHTML = lista.map((t) => `
-    <a class="row" href="#/ingresso/${esc(t.id)}" style="text-decoration:none">
-      <div class="row-main">
+    <div class="row">
+      <a class="row-main" href="#/ingresso/${esc(t.id)}" style="text-decoration:none;color:inherit">
         <div class="row-title">${esc(t.nome)}</div>
         <div class="row-sub">${esc([t.empresa, t.cidade].filter(Boolean).join(' · ') || t.email)}</div>
-      </div>
+      </a>
       <div class="row-side">
         <span class="badge badge-qr">${esc(t.id)}</span>
+        <button class="btn-x" data-del="${esc(t.id)}" title="Remover ingresso deste aparelho" aria-label="Remover ingresso ${esc(t.id)}">×</button>
       </div>
-    </a>
+    </div>
   `).join('');
+
+  el.querySelectorAll('[data-del]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!confirm('Remover este ingresso deste aparelho? (O QR Code baixado continua valendo.)')) return;
+      store.set(KEY_TICKETS, meusTickets().filter((x) => x.id !== btn.dataset.del));
+      renderMeusIngressos();
+    });
+  });
 }
 
 /* ----------------------------- Equipe: PIN ------------------------------- */
@@ -571,6 +580,17 @@ $('#btn-export-csv').addEventListener('click', () => {
   a.download = 'checkins-moveleiro3x.csv';
   a.click();
   URL.revokeObjectURL(a.href);
+});
+
+$('#btn-clear-all').addEventListener('click', () => {
+  const total = listaCheckinsOrdenada().length;
+  if (total === 0) { toast('Não há registros para apagar.'); return; }
+  if (!confirm(`Apagar TODOS os ${total} check-in(s) deste aparelho? Essa ação não pode ser desfeita.`)) return;
+  if (!confirm('Tem certeza? Se precisar da lista, exporte o CSV antes.')) return;
+  store.set(KEY_CHECKINS, {});
+  renderLista();
+  renderStats();
+  toast('Todos os registros foram apagados.');
 });
 
 /* --------------------------- Check-in manual ----------------------------- */

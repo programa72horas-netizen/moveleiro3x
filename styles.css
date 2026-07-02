@@ -245,6 +245,23 @@ input.invalid { border-color: var(--crit); }
 }
 .btn-ghost:hover { background: var(--surface-2); }
 
+.btn-danger { color: #e66767; }
+.btn-danger:hover { background: rgba(208, 59, 59, 0.12); }
+
+.btn-x {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.btn-x:hover { color: #e66767; border-color: rgba(208, 59, 59, 0.4); }
+
 .btn-lg { padding: 14px 26px; font-size: 16px; }
 .btn-block { width: 100%; }
 .btn-file { position: relative; overflow: hidden; }

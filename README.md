@@ -23,6 +23,7 @@ banco de dados, e pode ser hospedado gratuitamente no **GitHub Pages**.
 - **Check-in manual** para quem chegar sem pré-cadastro
 - **Lista de check-ins** com busca por nome, empresa ou código
 - **Exportação para CSV** (abre direto no Excel)
+- **Apagar registros** (útil para limpar os testes antes do dia do evento)
 - **Painel em tempo real**: total de check-ins, ritmo da última hora,
   meta de público e gráfico de check-ins por hora
 
