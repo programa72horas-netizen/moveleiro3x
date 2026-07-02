@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="description" content="Pré-check-in do evento Moveleiro 3X. Cadastre-se e receba seu QR Code de acesso.">
+  <title>Moveleiro 3X · Pré-check-in</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d0d0d'/%3E%3Ctext x='32' y='42' font-family='system-ui,sans-serif' font-size='26' font-weight='700' fill='%23eda100' text-anchor='middle'%3E3X%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <a href="#/" class="brand" aria-label="Moveleiro 3X — início">
+      <span class="brand-mark">3X</span>
+      <span class="brand-name">Moveleiro <strong>3X</strong></span>
+    </a>
+    <nav class="topnav">
+      <a href="#/cadastro" class="topnav-link">Pré-check-in</a>
+      <a href="#/equipe" class="topnav-link">Equipe</a>
+    </nav>
+  </header>
+
+  <main id="app">
+
+    <!-- ============ HOME ============ -->
+    <section id="view-home" class="view" hidden>
+      <div class="hero">
+        <p class="hero-kicker">Evento do setor moveleiro</p>
+        <h1 class="hero-title">Moveleiro <span class="accent">3X</span></h1>
+        <p class="hero-sub" id="home-event-info">Data e local em breve</p>
+        <p class="hero-desc">
+          Garanta sua entrada rápida no evento: faça o pré-check-in agora,
+          receba seu QR Code e apresente na portaria. Sem fila, sem papel.
+        </p>
+        <div class="hero-actions">
+          <a href="#/cadastro" class="btn btn-primary btn-lg">Fazer pré-check-in</a>
+          <a href="#/meus-ingressos" class="btn btn-ghost btn-lg" id="btn-my-tickets" hidden>Meus ingressos</a>
+        </div>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon" aria-hidden="true">⚡</div>
+          <h3>Entrada expressa</h3>
+          <p>Seu QR Code é lido na portaria em segundos. Nada de preencher ficha na hora.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon" aria-hidden="true">📱</div>
+          <h3>Ingresso no celular</h3>
+          <p>O ingresso fica salvo neste aparelho e pode ser baixado como imagem.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon" aria-hidden="true">👥</div>
+          <h3>Cadastre sua equipe</h3>
+          <p>Você pode fazer o pré-check-in de colegas e gerar um QR Code para cada um.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CADASTRO ============ -->
+    <section id="view-cadastro" class="view" hidden>
+      <div class="panel panel-narrow">
+        <h2 class="panel-title">Pré-check-in</h2>
+        <p class="panel-sub">Preencha seus dados para gerar o QR Code de acesso ao Moveleiro 3X.</p>
+
+        <form id="form-cadastro" novalidate>
+          <div class="field">
+            <label for="f-nome">Nome completo <span class="req">*</span></label>
+            <input id="f-nome" name="nome" type="text" autocomplete="name" required maxlength="80" placeholder="Ex.: Ana Laura Souza">
+            <p class="field-error" data-error-for="f-nome" hidden>Informe seu nome completo.</p>
+          </div>
+
+          <div class="field">
+            <label for="f-email">E-mail <span class="req">*</span></label>
+            <input id="f-email" name="email" type="email" autocomplete="email" required maxlength="120" placeholder="voce@empresa.com.br">
+            <p class="field-error" data-error-for="f-email" hidden>Informe um e-mail válido.</p>
+          </div>
+
+          <div class="field">
+            <label for="f-tel">Telefone / WhatsApp <span class="req">*</span></label>
+            <input id="f-tel" name="tel" type="tel" autocomplete="tel" inputmode="tel" required maxlength="16" placeholder="(00) 00000-0000">
+            <p class="field-error" data-error-for="f-tel" hidden>Informe um telefone com DDD.</p>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="f-empresa">Empresa</label>
+              <input id="f-empresa" name="empresa" type="text" autocomplete="organization" maxlength="80" placeholder="Nome da empresa">
+            </div>
+            <div class="field">
+              <label for="f-cargo">Cargo / função</label>
+              <input id="f-cargo" name="cargo" type="text" autocomplete="organization-title" maxlength="60" placeholder="Ex.: Comprador(a)">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="f-cidade">Cidade / UF</label>
+              <input id="f-cidade" name="cidade" type="text" maxlength="60" placeholder="Ex.: Arapongas / PR">
+            </div>
+            <div class="field">
+              <label for="f-fonte">Como soube do evento?</label>
+              <select id="f-fonte" name="fonte">
+                <option value="">Selecione…</option>
+                <option>Instagram</option>
+                <option>WhatsApp</option>
+                <option>Indicação de amigo</option>
+                <option>Convite da organização</option>
+                <option>Rádio / TV</option>
+                <option>Outro</option>
+              </select>
+            </div>
+          </div>
+
+          <label class="check">
+            <input id="f-lgpd" type="checkbox" required>
+            <span>Autorizo o uso dos meus dados para credenciamento e comunicação sobre o
+            Moveleiro 3X, conforme a LGPD. <span class="req">*</span></span>
+          </label>
+          <p class="field-error" data-error-for="f-lgpd" hidden>É preciso autorizar o uso dos dados para gerar o ingresso.</p>
+
+          <button type="submit" class="btn btn-primary btn-lg btn-block">Gerar meu QR Code</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ INGRESSO ============ -->
+    <section id="view-ingresso" class="view" hidden>
+      <div class="panel panel-narrow">
+        <div class="success-head" id="ingresso-success" hidden>
+          <div class="success-check" aria-hidden="true">✓</div>
+          <h2>Pré-check-in confirmado!</h2>
+        </div>
+
+        <div class="ticket" id="ticket-card">
+          <div class="ticket-head">
+            <span class="ticket-brand">MOVELEIRO 3X</span>
+            <span class="ticket-tag">PRÉ-CHECK-IN</span>
+          </div>
+          <p class="ticket-event" id="ticket-event"></p>
+          <div class="ticket-qr" id="ticket-qr" aria-label="QR Code do ingresso"></div>
+          <p class="ticket-id" id="ticket-id">—</p>
+          <div class="ticket-body">
+            <p class="ticket-name" id="ticket-name">—</p>
+            <p class="ticket-meta" id="ticket-meta">—</p>
+          </div>
+          <p class="ticket-note">Apresente este QR Code na entrada do evento.</p>
+        </div>
+
+        <div class="ticket-actions">
+          <button class="btn btn-primary" id="btn-download-ticket">Baixar ingresso (PNG)</button>
+          <button class="btn btn-ghost" id="btn-share-ticket">Compartilhar</button>
+        </div>
+        <div class="ticket-actions">
+          <a class="btn btn-ghost" href="#/cadastro">Cadastrar outra pessoa</a>
+          <a class="btn btn-ghost" href="#/meus-ingressos">Meus ingressos</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MEUS INGRESSOS ============ -->
+    <section id="view-meus-ingressos" class="view" hidden>
+      <div class="panel panel-narrow">
+        <h2 class="panel-title">Meus ingressos</h2>
+        <p class="panel-sub">Ingressos gerados neste aparelho.</p>
+        <div id="my-tickets-list" class="rows"></div>
+        <a href="#/cadastro" class="btn btn-primary btn-block" style="margin-top:16px">Novo pré-check-in</a>
+      </div>
+    </section>
+
+    <!-- ============ EQUIPE: PIN ============ -->
+    <section id="view-pin" class="view" hidden>
+      <div class="panel panel-narrow panel-center">
+        <h2 class="panel-title">Área da equipe</h2>
+        <p class="panel-sub">Digite o código de acesso da organização.</p>
+        <form id="form-pin">
+          <input id="f-pin" type="password" inputmode="text" autocomplete="off" class="pin-input" placeholder="Código de acesso">
+          <p class="field-error" id="pin-error" hidden>Código incorreto.</p>
+          <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ EQUIPE: PAINEL ============ -->
+    <section id="view-equipe" class="view" hidden>
+      <div class="staff-head">
+        <h2 class="panel-title">Portaria · Moveleiro 3X</h2>
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" data-tab="scanner" role="tab">Leitor QR</button>
+          <button class="tab" data-tab="lista" role="tab">Check-ins</button>
+          <button class="tab" data-tab="stats" role="tab">Painel</button>
+        </div>
+      </div>
+
+      <!-- Scanner -->
+      <div class="tabpane" id="pane-scanner">
+        <div class="scanner-wrap">
+          <div id="qr-reader"></div>
+          <div class="scanner-controls">
+            <button class="btn btn-primary" id="btn-start-scan">Ligar câmera</button>
+            <button class="btn btn-ghost" id="btn-stop-scan" hidden>Desligar câmera</button>
+            <label class="btn btn-ghost btn-file">
+              Ler QR de uma foto
+              <input type="file" id="file-scan" accept="image/*" hidden>
+            </label>
+          </div>
+          <p class="scanner-hint">Aponte a câmera para o QR Code do participante.</p>
+        </div>
+
+        <div class="scan-result" id="scan-result" hidden>
+          <div class="scan-result-status" id="scan-result-status"></div>
+          <div class="scan-result-body" id="scan-result-body"></div>
+          <div class="scan-result-actions" id="scan-result-actions"></div>
+        </div>
+      </div>
+
+      <!-- Lista -->
+      <div class="tabpane" id="pane-lista" hidden>
+        <div class="list-tools">
+          <input type="search" id="list-search" placeholder="Buscar por nome, empresa ou código…" class="search-input">
+          <button class="btn btn-ghost" id="btn-manual-add">＋ Check-in manual</button>
+          <button class="btn btn-ghost" id="btn-export-csv">Exportar CSV</button>
+        </div>
+
+        <form id="form-manual" class="manual-form" hidden>
+          <h3>Check-in manual (portaria)</h3>
+          <div class="field-row">
+            <div class="field">
+              <label for="m-nome">Nome completo <span class="req">*</span></label>
+              <input id="m-nome" type="text" required maxlength="80">
+            </div>
+            <div class="field">
+              <label for="m-empresa">Empresa</label>
+              <input id="m-empresa" type="text" maxlength="80">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="m-tel">Telefone</label>
+              <input id="m-tel" type="tel" inputmode="tel" maxlength="16">
+            </div>
+            <div class="field">
+              <label for="m-email">E-mail</label>
+              <input id="m-email" type="email" maxlength="120">
+            </div>
+          </div>
+          <div class="ticket-actions">
+            <button type="submit" class="btn btn-primary">Confirmar check-in</button>
+            <button type="button" class="btn btn-ghost" id="btn-manual-cancel">Cancelar</button>
+          </div>
+        </form>
+
+        <div id="checkin-list" class="rows"></div>
+        <p class="empty-note" id="list-empty" hidden>Nenhum check-in registrado neste aparelho ainda.</p>
+      </div>
+
+      <!-- Stats -->
+      <div class="tabpane" id="pane-stats" hidden>
+        <div class="tiles" id="stat-tiles"></div>
+
+        <div class="viz-card">
+          <h3 class="viz-title">Meta de público</h3>
+          <div class="meter-labels">
+            <span id="meter-value" class="meter-value">0 / 0</span>
+            <span id="meter-pct" class="meter-pct">0%</span>
+          </div>
+          <div class="meter" role="img" aria-label="Progresso da meta de check-ins">
+            <div class="meter-fill" id="meter-fill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="viz-card">
+          <h3 class="viz-title">Check-ins por hora</h3>
+          <div class="hourly" id="hourly-chart"></div>
+          <p class="empty-note" id="hourly-empty" hidden>Os check-ins de hoje aparecerão aqui por horário.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Moveleiro 3X · Pré-check-in digital</p>
+  </footer>
+
+  <div id="toast" class="toast" hidden></div>
+  <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+
+  <script src="assets/qrcode.js"></script>
+  <script src="assets/html5-qrcode.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
