@@ -26,6 +26,8 @@ banco de dados, e pode ser hospedado gratuitamente no **GitHub Pages**.
 - **Apagar registros** (útil para limpar os testes antes do dia do evento)
 - **Painel em tempo real**: total de check-ins, ritmo da última hora,
   meta de público e gráfico de check-ins por hora
+- **Planilha Google em tempo real** (opcional): cada pré-check-in e cada
+  check-in caem automaticamente numa planilha sua — veja [`PLANILHA.md`](PLANILHA.md)
 
 ## Como publicar (GitHub Pages)
 
@@ -58,6 +60,7 @@ const CONFIG = {
   },
   PIN_EQUIPE: '3X2026',  // ⚠️ troque este código antes do evento!
   META_PUBLICO: 300,     // meta usada no painel de estatísticas
+  PLANILHA_URL: '',      // URL do Apps Script (passo a passo em PLANILHA.md)
 };
 ```
 
@@ -66,14 +69,14 @@ const CONFIG = {
 - O QR Code do participante **carrega os próprios dados do cadastro**, por
   isso a portaria consegue ler o ingresso sem precisar de internet nem de um
   banco de dados central.
-- Os check-ins ficam salvos **no aparelho da portaria** (localStorage) e podem
-  ser exportados em CSV a qualquer momento.
-- Se houver **mais de um ponto de entrada**, cada aparelho terá sua própria
-  lista — exporte o CSV de cada um e junte as planilhas no final.
+- Com a **planilha Google configurada** (veja `PLANILHA.md`), os cadastros e
+  check-ins também são enviados em tempo real para uma planilha central —
+  mesmo com vários pontos de entrada.
+- Os check-ins também ficam salvos **no aparelho da portaria** (localStorage)
+  e podem ser exportados em CSV a qualquer momento, funcionando como reserva
+  caso a internet caia no local.
 - O código de acesso da equipe é uma proteção simples (o app roda todo no
-  navegador). Para um controle de acesso robusto ou uma lista central de
-  pré-cadastrados em tempo real, o próximo passo seria conectar o app a um
-  backend (ex.: Firebase ou Supabase).
+  navegador) — adequada para um evento, não para dados sensíveis.
 
 ## Estrutura do projeto
 
@@ -82,6 +85,7 @@ const CONFIG = {
 | `index.html` | Estrutura das telas (cadastro, ingresso, portaria, painel) |
 | `styles.css` | Tema escuro do evento |
 | `app.js` | Lógica do app e configuração do evento |
+| `PLANILHA.md` | Passo a passo para receber os cadastros numa planilha Google |
 | `qrcode.js` | Geração de QR Code ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT) |
 | `html5-qrcode.min.js` | Leitura de QR Code pela câmera ([html5-qrcode](https://github.com/mebjas/html5-qrcode), Apache-2.0) |
 

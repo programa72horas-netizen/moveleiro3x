@@ -17,6 +17,9 @@ const CONFIG = {
   META_PUBLICO: 300,
   // Prefixo que identifica os QR Codes deste evento
   QR_PREFIXO: 'MVX1|',
+  // URL do Apps Script que grava os cadastros na planilha Google
+  // (siga o passo a passo do arquivo PLANILHA.md e cole aqui a URL /exec)
+  PLANILHA_URL: 'https://script.google.com/macros/s/AKfycbxxkEsBW58A90AKA3c3Gk9aqOxHzkOVmBuD4mto63ldhQDFhPhr08NYCZR7PdPqk5nj8g/exec',
 };
 
 /* ------------------------------ Utilidades ------------------------------- */
@@ -95,6 +98,34 @@ function salvarCheckin(c) {
   todos[c.id] = c;
   store.set(KEY_CHECKINS, todos);
 }
+
+/* --------------------------- Planilha Google ----------------------------- */
+// Envia cada cadastro/check-in para a planilha (quando configurada).
+// Se estiver sem internet, guarda numa fila e reenvia quando a conexão voltar.
+const KEY_FILA = 'mvx3x_fila_planilha';
+
+function enviarParaPlanilha(dados) {
+  if (!CONFIG.PLANILHA_URL) return;
+  fetch(CONFIG.PLANILHA_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: new URLSearchParams(dados),
+  }).catch(() => {
+    const fila = store.get(KEY_FILA, []);
+    fila.push(dados);
+    store.set(KEY_FILA, fila.slice(-300));
+  });
+}
+
+function reenviarFila() {
+  if (!CONFIG.PLANILHA_URL) return;
+  const fila = store.get(KEY_FILA, []);
+  if (fila.length === 0) return;
+  store.set(KEY_FILA, []);
+  fila.forEach(enviarParaPlanilha);
+}
+
+window.addEventListener('online', reenviarFila);
 
 /* ------------------------------- QR Code --------------------------------- */
 // qrcode-generator usa latin-1 por padrão; nomes com acento precisam de UTF-8
@@ -233,6 +264,13 @@ $('#form-cadastro').addEventListener('submit', (ev) => {
     criadoEm: Date.now(),
   };
   salvarTicket(ticket);
+  enviarParaPlanilha({
+    tipo: 'precheckin',
+    quando: new Date().toLocaleString('pt-BR'),
+    id: ticket.id, nome: ticket.nome, email: ticket.email, tel: ticket.tel,
+    empresa: ticket.empresa, cargo: ticket.cargo, cidade: ticket.cidade,
+    fonte: ticket.fonte,
+  });
   renderIngresso(ticket, true);
   mostrarView('ingresso');
   history.replaceState(null, '', '#/ingresso/' + ticket.id);
@@ -501,6 +539,13 @@ function onQrLido(texto) {
 
   const registro = { ...dados, checkinEm: agora, origem: 'qr' };
   salvarCheckin(registro);
+  enviarParaPlanilha({
+    tipo: 'checkin',
+    quando: new Date(agora).toLocaleString('pt-BR'),
+    id: registro.id, nome: registro.nome, email: registro.email, tel: registro.tel,
+    empresa: registro.empresa, cargo: registro.cargo, cidade: registro.cidade,
+    origem: 'QR Code',
+  });
   beep('ok');
   mostrarResultado('ok', '✓ Check-in confirmado', `
     <p class="who">${esc(registro.nome)}</p>
@@ -610,7 +655,7 @@ $('#form-manual').addEventListener('submit', (ev) => {
   const nome = $('#m-nome').value.trim();
   if (nome.length < 3) { toast('Informe o nome do participante.'); return; }
 
-  salvarCheckin({
+  const registroManual = {
     id: gerarId(),
     nome,
     email: $('#m-email').value.trim(),
@@ -619,6 +664,14 @@ $('#form-manual').addEventListener('submit', (ev) => {
     cargo: '', cidade: '',
     checkinEm: Date.now(),
     origem: 'manual',
+  };
+  salvarCheckin(registroManual);
+  enviarParaPlanilha({
+    tipo: 'checkin',
+    quando: new Date(registroManual.checkinEm).toLocaleString('pt-BR'),
+    id: registroManual.id, nome: registroManual.nome, email: registroManual.email,
+    tel: registroManual.tel, empresa: registroManual.empresa, cargo: '', cidade: '',
+    origem: 'Portaria',
   });
 
   $('#form-manual').reset();
@@ -745,4 +798,5 @@ function renderHourly(todos) {
   }
 })();
 
+reenviarFila();
 rota();
