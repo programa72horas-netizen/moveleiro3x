@@ -19,7 +19,7 @@ const CONFIG = {
   QR_PREFIXO: 'MVX1|',
   // URL do Apps Script que grava os cadastros na planilha Google
   // (siga o passo a passo do arquivo PLANILHA.md e cole aqui a URL /exec)
-  PLANILHA_URL: 'https://script.google.com/macros/s/AKfycbxxkEsBW58A90AKA3c3Gk9aqOxHzkOVmBuD4mto63ldhQDFhPhr08NYCZR7PdPqk5nj8g/exec',
+  PLANILHA_URL: 'https://script.google.com/macros/s/AKfycbw8_8zZjlst8Y4gXxdfh5L85UIS_CdaLh-mWtBZde9rzCZojZEdbsBuMpN0b0LGYFIb_g/exec',
 };
 
 /* ------------------------------ Utilidades ------------------------------- */
@@ -125,7 +125,28 @@ function reenviarFila() {
   fila.forEach(enviarParaPlanilha);
 }
 
-window.addEventListener('online', reenviarFila);
+// Envia à planilha os ingressos deste aparelho que ainda não foram enviados —
+// inclusive os criados ANTES de a planilha ser configurada.
+function sincronizarIngressos() {
+  if (!CONFIG.PLANILHA_URL) return;
+  const lista = meusTickets();
+  let mudou = false;
+  for (const t of lista) {
+    if (t.enviado) continue;
+    enviarParaPlanilha({
+      tipo: 'precheckin',
+      quando: new Date(t.criadoEm).toLocaleString('pt-BR'),
+      id: t.id, nome: t.nome, email: t.email, tel: t.tel,
+      empresa: t.empresa, cargo: t.cargo, cidade: t.cidade,
+      fonte: t.fonte || '',
+    });
+    t.enviado = true;
+    mudou = true;
+  }
+  if (mudou) store.set(KEY_TICKETS, lista);
+}
+
+window.addEventListener('online', () => { reenviarFila(); sincronizarIngressos(); });
 
 /* ------------------------------- QR Code --------------------------------- */
 // qrcode-generator usa latin-1 por padrão; nomes com acento precisam de UTF-8
@@ -264,13 +285,7 @@ $('#form-cadastro').addEventListener('submit', (ev) => {
     criadoEm: Date.now(),
   };
   salvarTicket(ticket);
-  enviarParaPlanilha({
-    tipo: 'precheckin',
-    quando: new Date().toLocaleString('pt-BR'),
-    id: ticket.id, nome: ticket.nome, email: ticket.email, tel: ticket.tel,
-    empresa: ticket.empresa, cargo: ticket.cargo, cidade: ticket.cidade,
-    fonte: ticket.fonte,
-  });
+  sincronizarIngressos();
   renderIngresso(ticket, true);
   mostrarView('ingresso');
   history.replaceState(null, '', '#/ingresso/' + ticket.id);
@@ -799,4 +814,5 @@ function renderHourly(todos) {
 })();
 
 reenviarFila();
+sincronizarIngressos();
 rota();
