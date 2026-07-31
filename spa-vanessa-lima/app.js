@@ -18,10 +18,11 @@ const CONFIG = {
 
   // Funcionamento do spa
   HORARIOS: {
-    diasSemana: [1, 2, 3, 4, 5, 6],  // 0=dom, 1=seg … 6=sáb
-    abre: 8,                          // primeira sessão às 8h
-    fecha: 19,                        // última sessão começa às 18h
-    duracaoMin: 60,                   // duração de cada sessão
+    diasSemana: [1, 2, 3, 4, 5, 6],              // 0=dom, 1=seg … 6=sáb
+    semana: { primeira: '08:00', ultima: '18:30' }, // seg–sex: 08h às 19h30
+    sabado: { primeira: '08:00', ultima: '16:00' }, // sábado: 08h às 17h
+    passoMin: 30,                                 // grade de meia em meia hora
+    duracaoMin: 60,                               // duração de cada sessão
   },
   CAPACIDADE_POR_HORARIO: 1,          // atendimentos simultâneos
 
@@ -423,17 +424,27 @@ function criarPlano(pacoteId, origem) {
 /* ------------------------------------------------------------
    Agenda: horários e conflitos
    ------------------------------------------------------------ */
-function horariosDoDia() {
+function horariosDoDia(dataStr) {
+  const d = deISO(dataStr || hojeISO());
+  const faixa = d.getDay() === 6 ? CONFIG.HORARIOS.sabado : CONFIG.HORARIOS.semana;
+  const [h0, m0] = faixa.primeira.split(':').map(Number);
+  const [h1, m1] = faixa.ultima.split(':').map(Number);
+  const fim = h1 * 60 + m1;
   const hs = [];
-  for (let h = CONFIG.HORARIOS.abre; h < CONFIG.HORARIOS.fecha; h++) {
-    hs.push(String(h).padStart(2, '0') + ':00');
+  for (let t = h0 * 60 + m0; t <= fim; t += CONFIG.HORARIOS.passoMin) {
+    hs.push(String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'));
   }
   return hs;
 }
 
+/* duas sessões conflitam quando os horários se sobrepõem (a grade é de
+   30 em 30 min, mas cada sessão dura CONFIG.HORARIOS.duracaoMin) */
 function ocupacoes(dataStr, hora) {
+  const inicio = deISO(dataStr, hora).getTime();
+  const dur = CONFIG.HORARIOS.duracaoMin * 60000;
   return DB.agendamentos.filter(
-    (a) => a.data === dataStr && a.hora === hora && (a.status === 'agendada' || a.status === 'concluida')
+    (a) => a.data === dataStr && (a.status === 'agendada' || a.status === 'concluida') &&
+           Math.abs(deISO(a.data, a.hora).getTime() - inicio) < dur
   ).length;
 }
 function horarioLivre(dataStr, hora) {
@@ -563,7 +574,7 @@ function renderPerfisConhecidos() {
 
 function entrar() {
   const whats = normWhats($('#login-whats').value);
-  if (whats.length < 12) { toast('Digite seu WhatsApp com DDD 😉'); return; }
+  if (whats.length < 12) { toast('Digite seu WhatsApp com DDD.'); return; }
 
   const existente = clientePorWhats(whats);
   if (existente) {
@@ -578,7 +589,7 @@ function entrar() {
     arquivada.removido = false;
     salvarCliente(arquivada);
     definirSessao({ clienteId: arquivada.id });
-    toast('Que bom te ver de novo, ' + primeiroNome(arquivada.nome) + '! 💛');
+    toast('Que bom te ver de novo, ' + primeiroNome(arquivada.nome) + '!');
     if (arquivada.onboarded) abrirApp(); else abrirOnboarding(arquivada);
     return;
   }
@@ -590,7 +601,7 @@ function entrar() {
     return;
   }
   const nome = $('#login-nome').value.trim();
-  if (nome.length < 3) { toast('Digite seu nome completo 💛'); return; }
+  if (nome.length < 3) { toast('Digite seu nome completo.'); return; }
 
   const novo = {
     id: uid(), nome, whats,
@@ -635,14 +646,14 @@ function concluirOnboarding() {
   }
   cli.onboarded = true;
   salvarCliente(cli);
-  toast(onbEscolha !== 'nenhum' ? 'Plano registrado! Agora é só agendar 💛' : 'Perfil criado! Conheça nossos planos 💛');
+  toast(onbEscolha !== 'nenhum' ? 'Plano registrado. Agora é só agendar.' : 'Perfil criado. Conheça nossos planos quando quiser.');
   abrirApp();
 }
 
 function pedirNotificacao() {
   if (!('Notification' in window)) { toast('Este navegador não aceita notificações — os lembretes aparecerão aqui no app.'); return; }
   Notification.requestPermission().then((p) => {
-    toast(p === 'granted' ? 'Lembretes ativados! 🔔' : 'Sem problema — os lembretes aparecerão aqui no app.');
+    toast(p === 'granted' ? 'Lembretes ativados.' : 'Tudo bem — os lembretes aparecerão aqui no app.');
   });
 }
 
@@ -680,7 +691,7 @@ function proximasDoCliente(cli) {
 }
 
 function renderInicio(cli) {
-  $('#inicio-ola').textContent = saudacao() + ', ' + primeiroNome(cli.nome) + ' 🤍';
+  $('#inicio-ola').textContent = saudacao() + ', ' + primeiroNome(cli.nome) + '.';
 
   const prox = proximasDoCliente(cli)[0];
   const areaProx = $('#inicio-proxima');
@@ -694,25 +705,28 @@ function renderInicio(cli) {
       '</div>';
   } else {
     areaProx.innerHTML =
-      '<div class="vazio"><span class="vazio-icone">🌿</span>Nenhuma sessão marcada.<br>Que tal reservar seu momento?</div>';
+      '<div class="vazio">Nenhuma sessão marcada.<br>Reserve seu próximo momento de cuidado.</div>';
   }
 
   const pools = poolsDoCliente(cli).filter((p) => p.total > 0);
   const areaCred = $('#inicio-creditos');
   if (!pools.length) {
     areaCred.innerHTML =
-      '<div class="vazio"><span class="vazio-icone">✨</span>Você ainda não tem um plano ativo.<br>Conheça nossos protocolos na aba <b>Planos</b>.</div>';
+      '<div class="vazio">Você ainda não tem um plano ativo.<br>Conheça nossos protocolos na aba <b>Planos</b>.</div>';
   } else {
     areaCred.innerHTML = '<div class="cartao">' + pools.map(barraPool).join('') + '</div>';
   }
 }
 
-function barraPool(p) {
+function barraPool(p, soLabel) {
   const disponiveis = p.restantes + p.reservadas; // ainda não concluídas
   const pct = Math.min(100, Math.max(0, p.total ? Math.round((disponiveis / p.total) * 100) : 0));
+  const titulo = soLabel
+    ? esc(p.label)
+    : esc(p.nomePacote) + (p.label !== 'Sessões' ? ' · ' + esc(p.label) : '');
   return (
     '<div class="pool">' +
-      '<div class="pool-topo"><strong>' + esc(p.nomePacote) + (p.label !== 'Sessões' ? ' · ' + esc(p.label) : '') + '</strong>' +
+      '<div class="pool-topo"><strong>' + titulo + '</strong>' +
       '<span>' + disponiveis + ' de ' + p.total + '</span></div>' +
       '<div class="pool-barra"><i style="width:' + pct + '%"></i></div>' +
       (p.reservadas ? '<small class="texto-suave" style="font-size:.78rem">' + p.reservadas + ' já agendada' + (p.reservadas > 1 ? 's' : '') + '</small>' : '') +
@@ -746,8 +760,8 @@ function renderAgendar(cli) {
   if (agSel.procId) {
     const rest = restantesParaProc(cli, agSel.procId);
     cob.innerHTML = rest > 0
-      ? '✨ Coberto pelo seu plano — <b>' + rest + '</b> ' + (rest === 1 ? 'sessão restante' : 'sessões restantes') + ' para este procedimento.'
-      : 'Este procedimento será <b>avulso</b> — combine o valor com a recepção pelo WhatsApp. 💛';
+      ? 'Coberto pelo seu plano — <b>' + rest + '</b> ' + (rest === 1 ? 'sessão restante' : 'sessões restantes') + ' para este procedimento.'
+      : 'Este procedimento será <b>avulso</b> — combine o valor com a recepção pelo WhatsApp.';
   } else {
     cob.textContent = '';
   }
@@ -802,11 +816,11 @@ function renderSlots() {
   const area = $('#ag-slots');
   area.innerHTML = '';
   if (!agSel.data) {
-    area.innerHTML = '<p class="texto-suave" style="grid-column:1/-1">Escolha um dia no calendário. 🗓️</p>';
+    area.innerHTML = '<p class="texto-suave" style="grid-column:1/-1">Escolha um dia no calendário.</p>';
     return;
   }
   const agoraD = new Date();
-  for (const h of horariosDoDia()) {
+  for (const h of horariosDoDia(agSel.data)) {
     const b = document.createElement('button');
     b.className = 'slot' + (agSel.hora === h ? ' ativo' : '');
     b.textContent = h;
@@ -853,12 +867,12 @@ let seriePendente = null;
 
 function revisarAgendamento() {
   const cli = clienteLogado();
-  if (!agSel.procId) { toast('Escolha o procedimento 💆‍♀️'); return; }
-  if (!agSel.data) { toast('Escolha o dia no calendário 🗓️'); return; }
-  if (!agSel.hora) { toast('Escolha o horário ⏰'); return; }
+  if (!agSel.procId) { toast('Escolha o procedimento.'); return; }
+  if (!agSel.data) { toast('Escolha o dia no calendário.'); return; }
+  if (!agSel.hora) { toast('Escolha o horário.'); return; }
   // o app pode ter ficado aberto: o horário escolhido já passou ou foi ocupado?
   if (deISO(agSel.data, agSel.hora) <= new Date() || !horarioLivre(agSel.data, agSel.hora)) {
-    toast('Esse horário não está mais disponível — escolha outro ⏰');
+    toast('Esse horário não está mais disponível — escolha outro.');
     agSel.hora = null;
     renderAgendar(cli);
     return;
@@ -895,7 +909,7 @@ function revisarAgendamento() {
         : fmtDataLonga(datas[0]) + ' · ' + agSel.hora) +
       '</small></div>' +
     (puladas.length
-      ? '<p class="texto-suave mt-8" style="font-size:.84rem">⚠️ Pulamos ' + puladas.length + ' semana' + (puladas.length > 1 ? 's' : '') +
+      ? '<p class="texto-suave mt-8" style="font-size:.84rem">Pulamos ' + puladas.length + ' semana' + (puladas.length > 1 ? 's' : '') +
         ' com horário ocupado (' + puladas.map(fmtDataCurta).join(', ') + ') e compensamos no final.</p>'
       : '');
 
@@ -925,7 +939,7 @@ function confirmarSerie() {
   if (invalida) {
     fecharModal('modal-serie');
     seriePendente = null;
-    toast('Um dos horários ficou indisponível — revise o agendamento 🙏');
+    toast('Um dos horários ficou indisponível — revise o agendamento.');
     renderAgendar(cli);
     return;
   }
@@ -958,7 +972,7 @@ function confirmarSerie() {
   agSel.data = null; agSel.hora = null;
   $('#ag-rec').checked = false;
   const campo = $('#ag-rec-qtd'); campo.value = ''; campo._auto = false;
-  toast(n > 1 ? 'Sessões agendadas! Até breve 💛' : 'Sessão agendada! Até breve 💛');
+  toast(n > 1 ? 'Sessões agendadas.' : 'Sessão agendada.');
   mostrarAbaSessoes('proximas');
   irPara('sessoes');
 }
@@ -977,12 +991,12 @@ function renderProximas(cli) {
   const lista = $('#lista-proximas');
   const prox = proximasDoCliente(cli);
   if (!prox.length) {
-    lista.innerHTML = '<div class="vazio"><span class="vazio-icone">🗓️</span>Nenhuma sessão marcada.<br>Toque em <b>Agendar</b> para reservar seu horário.</div>';
+    lista.innerHTML = '<div class="vazio">Nenhuma sessão marcada.<br>Toque em <b>Agendar</b> para reservar seu horário.</div>';
     return;
   }
   let html = '';
   if (prox.length > 1) {
-    html += '<button class="btn-contorno mb-14" id="btn-ics-todas">📅 Adicionar todas à agenda do celular</button>';
+    html += '<button class="btn-contorno mb-14" id="btn-ics-todas">Adicionar todas à agenda do celular</button>';
   }
   html += prox.map((a) => {
     const d = deISO(a.data);
@@ -993,8 +1007,8 @@ function renderProximas(cli) {
         '<small>' + DIAS_LONGO[d.getDay()] + ' · <b>' + a.hora + '</b>' +
         (a.serieId ? ' · <span class="tag ouro">recorrente</span>' : '') + '</small></div>' +
         '<div class="sessao-acoes"><div class="linha-btns">' +
-          '<button class="btn-mini dourado" data-ics="' + a.id + '" title="Adicionar à agenda">📅</button>' +
-          '<a class="btn-mini verde" target="_blank" rel="noopener" href="' + esc(zapRemarcar(cli, a)) + '" title="Remarcar pelo WhatsApp">✏️</a>' +
+          '<button class="btn-mini dourado" data-ics="' + a.id + '" title="Adicionar à agenda"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg></button>' +
+          '<a class="btn-mini verde" target="_blank" rel="noopener" href="' + esc(zapRemarcar(cli, a)) + '" title="Remarcar pelo WhatsApp"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></a>' +
           '<button class="btn-mini vermelho" data-cancela="' + a.id + '" title="Cancelar">✕</button>' +
         '</div></div>' +
       '</div>'
@@ -1017,7 +1031,7 @@ function renderProximas(cli) {
 
 function zapRemarcar(cli, a) {
   return linkZap(CONFIG.WHATS_COMERCIAL,
-    'Olá! Sou ' + cli.nome + ' 💛 Preciso remarcar minha sessão de ' + nomeProc(a.procId) +
+    'Olá! Sou ' + cli.nome + '. Preciso remarcar minha sessão de ' + nomeProc(a.procId) +
     ' do dia ' + fmtDataCurta(a.data) + ' às ' + a.hora + '. Quais horários vocês têm?');
 }
 
@@ -1061,12 +1075,12 @@ function renderHistorico(cli) {
 
   const feitas = passadas.filter((a) => a.status === 'concluida').length;
   if (!passadas.length) {
-    lista.innerHTML = '<div class="vazio"><span class="vazio-icone">🌸</span>Seu histórico aparecerá aqui após a primeira sessão.</div>';
+    lista.innerHTML = '<div class="vazio">Seu histórico aparecerá aqui após a primeira sessão.</div>';
     return;
   }
   let html = '<div class="cartao texto-centro mb-14" style="padding:16px">' +
     '<span style="font-family:var(--fonte-serif);font-size:2rem;color:var(--ouro-2)">' + feitas + '</span><br>' +
-    '<small class="texto-suave">' + (feitas === 1 ? 'sessão realizada' : 'sessões realizadas') + ' 💛</small></div>';
+    '<small class="texto-suave">' + (feitas === 1 ? 'sessão realizada' : 'sessões realizadas') + '</small></div>';
 
   let mesAtual = '';
   for (const a of passadas) {
@@ -1097,7 +1111,7 @@ function renderPlanos(cli) {
   const pools = poolsDoCliente(cli);
   const planosAtivos = (cli.planos || []).filter((p) => !p.removido);
   if (!planosAtivos.length) {
-    area.innerHTML = '<div class="vazio"><span class="vazio-icone">✨</span>Você ainda não tem um plano.<br>Escolha um protocolo abaixo e fale com a gente. 💛</div>';
+    area.innerHTML = '<div class="vazio">Você ainda não tem um plano.<br>Escolha um protocolo abaixo e fale com nosso atendimento.</div>';
   } else {
     area.innerHTML = planosAtivos.map((plano) => {
       const doPlano = pools.filter((p) => p.plano.id === plano.id);
@@ -1107,9 +1121,9 @@ function renderPlanos(cli) {
           '<strong style="font-weight:500;flex:1">' + esc(plano.nome) + '</strong>' +
           '<small class="texto-suave" style="flex:none">desde ' + String(dc.getDate()).padStart(2, '0') + '/' + String(dc.getMonth() + 1).padStart(2, '0') + '/' + dc.getFullYear() + '</small>' +
         '</div>' +
-        doPlano.map(barraPool).join('') +
+        doPlano.map((p) => barraPool(p, true)).join('') +
         '<a class="btn-zap mt-8" target="_blank" rel="noopener" href="' +
-          esc(linkZap(CONFIG.WHATS_COMERCIAL, 'Olá! Sou ' + cli.nome + ' 💛 Gostaria de renovar meu plano *' + plano.nome + '*.')) +
+          esc(linkZap(CONFIG.WHATS_COMERCIAL, 'Olá! Sou ' + cli.nome + '. Gostaria de renovar meu plano *' + plano.nome + '*.')) +
         '">Renovar pelo WhatsApp</a>' +
       '</div>';
     }).join('');
@@ -1123,7 +1137,7 @@ function renderPlanos(cli) {
       '<div class="pacote-preco">' + moeda(p.preco) + '</div>' +
       '<a class="btn-zap" target="_blank" rel="noopener" href="' +
         esc(linkZap(CONFIG.WHATS_COMERCIAL,
-          'Olá! Vim pelo app do Spa Vanessa Lima 💛 Tenho interesse no pacote *' + p.nome + '* (' + p.desc + ') — ' + moeda(p.preco) + '. Pode me ajudar?')) +
+          'Olá! Vim pelo app do Spa Vanessa Lima. Tenho interesse no pacote *' + p.nome + '* (' + p.desc + ') — ' + moeda(p.preco) + '. Pode me ajudar?')) +
       '">Comprar · Renovar</a>' +
     '</div>'
   ).join('');
@@ -1133,7 +1147,7 @@ function renderPlanos(cli) {
     '<div style="padding:8px 2px;border-bottom:1px solid var(--linha)"><span style="color:var(--ouro)">✦</span>&nbsp; ' + esc(p.nome) + '</div>'
   ).join('');
   $('#zap-avulsa').href = linkZap(CONFIG.WHATS_COMERCIAL,
-    'Olá! Vim pelo app do Spa Vanessa Lima 💛 Gostaria de saber os valores das sessões avulsas.');
+    'Olá! Vim pelo app do Spa Vanessa Lima. Gostaria de saber os valores das sessões avulsas.');
 }
 
 /* ------------------------------------------------------------
@@ -1152,15 +1166,15 @@ function verificarLembretes() {
     const f = flags[a.id] || (flags[a.id] = {});
     if (mins <= 120 && !f.h2) {
       f.h2 = true; f.d1 = true; mudou = true;
-      const texto = '⏰ É hoje! Sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é às <b>' + esc(a.hora) + '</b>.';
+      const texto = 'É hoje: sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é às <b>' + esc(a.hora) + '</b>.';
       banners.push({ id: uid(), clienteId: cli.id, agId: a.id, texto });
-      notificar('É quase hora do seu momento ✨', 'Sua sessão de ' + nomeProc(a.procId) + ' é hoje às ' + a.hora + '.');
+      notificar('Spa Vanessa Lima', 'Sua sessão de ' + nomeProc(a.procId) + ' é hoje às ' + a.hora + '.');
     } else if (mins <= 1440 && !f.d1) {
       f.d1 = true; mudou = true;
       const quando = a.data === hojeISO() ? 'hoje' : 'amanhã';
-      const texto = '🌿 Lembrete: sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é <b>' + quando + '</b> às <b>' + esc(a.hora) + '</b>.';
+      const texto = 'Lembrete: sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é <b>' + quando + '</b> às <b>' + esc(a.hora) + '</b>.';
       banners.push({ id: uid(), clienteId: cli.id, agId: a.id, texto });
-      notificar('Seu momento está chegando 🌿', 'Sessão de ' + nomeProc(a.procId) + ' ' + quando + ' às ' + a.hora + '.');
+      notificar('Spa Vanessa Lima', 'Sessão de ' + nomeProc(a.procId) + ' ' + quando + ' às ' + a.hora + '.');
     }
   }
 
@@ -1194,7 +1208,7 @@ function renderBanners() {
   for (const b of banners) {
     const div = document.createElement('div');
     div.className = 'banner';
-    div.innerHTML = '<span class="banner-icone">🔔</span><p>' + b.texto + '</p>';
+    div.innerHTML = '<span class="banner-icone"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><p>' + b.texto + '</p>';
     const x = document.createElement('button');
     x.className = 'fechar'; x.textContent = '×'; x.setAttribute('aria-label', 'Dispensar');
     x.addEventListener('click', () => {
@@ -1228,7 +1242,7 @@ function baixarICS(ags, cli) {
       'DTSTART:' + carimbo(ini),
       'DTEND:' + carimbo(fim),
       'SUMMARY:' + nomeProc(a.procId) + ' — Spa Vanessa Lima',
-      'DESCRIPTION:Sessão agendada pelo app do Spa Vanessa Lima 💛',
+      'DESCRIPTION:Sessão agendada pelo app do Spa Vanessa Lima',
       'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Sua sessão é amanhã', 'TRIGGER:-P1D', 'END:VALARM',
       'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Sua sessão é daqui a 2 horas', 'TRIGGER:-PT2H', 'END:VALARM',
       'END:VEVENT'
@@ -1244,7 +1258,7 @@ function baixarICS(ags, cli) {
   aEl.click();
   aEl.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  toast('Abra o arquivo baixado para salvar na agenda 📅');
+  toast('Abra o arquivo baixado para salvar na agenda do celular.');
 }
 
 /* ------------------------------------------------------------
@@ -1294,18 +1308,18 @@ function renderAdmPainel() {
 
   const areaLem = $('#adm-lembretes');
   if (!paraLembrar.length) {
-    areaLem.innerHTML = '<div class="vazio">Nenhuma sessão de hoje ou amanhã pendente de lembrete. ✅</div>';
+    areaLem.innerHTML = '<div class="vazio">Nenhuma sessão de hoje ou amanhã pendente de lembrete.</div>';
   } else {
     areaLem.innerHTML = paraLembrar.map((a) => {
       const c = clientePorId(a.clienteId);
       if (!c) return '';
       const quando = a.data === hoje ? 'hoje' : 'amanhã';
-      const msg = 'Olá, ' + primeiroNome(c.nome) + '! 🌿 Passando para lembrar da sua sessão de *' +
-        nomeProc(a.procId) + '* ' + quando + ' às *' + a.hora + '* no Spa Vanessa Lima. Te esperamos! 💛';
+      const msg = 'Olá, ' + primeiroNome(c.nome) + '! Passando para lembrar da sua sessão de *' +
+        nomeProc(a.procId) + '* ' + quando + ' às *' + a.hora + '* no Spa Vanessa Lima. Até logo!';
       return '<div class="sessao-item">' +
         '<div class="sessao-info"><strong>' + esc(c.nome) + '</strong>' +
         '<small>' + esc(nomeProc(a.procId)) + ' · <b>' + quando + '</b> às <b>' + a.hora + '</b></small></div>' +
-        '<a class="btn-mini verde" target="_blank" rel="noopener" href="' + esc(linkZap(c.whats, msg)) + '">Lembrar 💬</a>' +
+        '<a class="btn-mini verde" target="_blank" rel="noopener" href="' + esc(linkZap(c.whats, msg)) + '">Lembrar</a>' +
       '</div>';
     }).join('');
   }
@@ -1319,17 +1333,17 @@ function renderAdmPainel() {
 
   const areaRen = $('#adm-renovacoes');
   if (!renovar.length) {
-    areaRen.innerHTML = '<div class="vazio">Nenhuma cliente perto de terminar o plano. 🎉</div>';
+    areaRen.innerHTML = '<div class="vazio">Nenhuma cliente perto de terminar o plano.</div>';
   } else {
     areaRen.innerHTML = renovar.map(({ c, rest }) => {
-      const msg = 'Olá, ' + primeiroNome(c.nome) + '! 💛 Seu plano no Spa Vanessa Lima está ' +
+      const msg = 'Olá, ' + primeiroNome(c.nome) + '! Seu plano no Spa Vanessa Lima está ' +
         (rest === 0 ? 'finalizado' : 'quase no fim (' + rest + ' ' + (rest === 1 ? 'sessão restante' : 'sessões restantes') + ')') +
-        '. Quer garantir a renovação com condições especiais? ✨';
+        '. Podemos garantir a sua renovação?';
       return '<div class="sessao-item">' +
         '<div class="avatar">' + esc(iniciais(c.nome)) + '</div>' +
         '<div class="sessao-info"><strong>' + esc(c.nome) + '</strong>' +
         '<small>' + (rest === 0 ? 'plano finalizado' : rest + ' ' + (rest === 1 ? 'sessão restante' : 'sessões restantes')) + '</small></div>' +
-        '<a class="btn-mini verde" target="_blank" rel="noopener" href="' + esc(linkZap(c.whats, msg)) + '">Oferecer 💬</a>' +
+        '<a class="btn-mini verde" target="_blank" rel="noopener" href="' + esc(linkZap(c.whats, msg)) + '">Oferecer</a>' +
       '</div>';
     }).join('');
   }
@@ -1348,7 +1362,7 @@ function renderAdmAgenda() {
 
   const area = $('#adm-agenda-lista');
   if (!doDia.length) {
-    area.innerHTML = '<div class="vazio"><span class="vazio-icone">🗓️</span>Nenhum atendimento neste dia.</div>';
+    area.innerHTML = '<div class="vazio">Nenhum atendimento neste dia.</div>';
     return;
   }
   area.innerHTML = doDia.map((a) => {
@@ -1434,7 +1448,7 @@ function atualizarHorasEncaixe() {
   const data = $('#enc-data').value;
   const agoraD = new Date();
   const fechado = data && !diaAberto(deISO(data));
-  $('#enc-hora').innerHTML = horariosDoDia().map((h) => {
+  $('#enc-hora').innerHTML = horariosDoDia(data).map((h) => {
     const passado = !data || deISO(data, h) <= agoraD;
     const ocupado = data && !horarioLivre(data, h);
     const ok = data && !fechado && !passado && !ocupado;
@@ -1564,7 +1578,7 @@ function abrirFichaCliente(id) {
 
     '<div class="linha-flex mb-14">' +
       '<a class="btn-mini verde" style="flex:none" target="_blank" rel="noopener" href="' +
-        esc(linkZap(c.whats, 'Olá, ' + primeiroNome(c.nome) + '! Aqui é do Spa Vanessa Lima 💛')) + '">💬 ' + fmtWhats(c.whats) + '</a>' +
+        esc(linkZap(c.whats, 'Olá, ' + primeiroNome(c.nome) + '! Aqui é do Spa Vanessa Lima.')) + '">WhatsApp · ' + fmtWhats(c.whats) + '</a>' +
     '</div>' +
 
     '<div class="estatisticas mb-14">' +

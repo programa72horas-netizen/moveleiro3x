@@ -63,19 +63,25 @@ Tudo fica no início do arquivo [`app.js`](app.js):
 
 ```js
 const CONFIG = {
-  WHATS_COMERCIAL: '5548999999999', // ⚠️ WhatsApp comercial do spa (DDI+DDD+número)
-  PIN_EQUIPE: 'VL2026',             // ⚠️ código de acesso da recepção — troque!
+  WHATS_COMERCIAL: '555492285445',  // WhatsApp comercial do spa (DDI+DDD+número)
+  PIN_EQUIPE: '…',                  // código de acesso da recepção
   HORARIOS: {
-    diasSemana: [1, 2, 3, 4, 5, 6], // 0=dom, 1=seg … 6=sáb
-    abre: 8,                        // primeira sessão às 8h
-    fecha: 19,                      // última sessão começa às 18h
-    duracaoMin: 60,
+    diasSemana: [1, 2, 3, 4, 5, 6],              // 0=dom, 1=seg … 6=sáb
+    semana: { primeira: '08:00', ultima: '18:30' }, // seg–sex: 08h às 19h30
+    sabado: { primeira: '08:00', ultima: '16:00' }, // sábado: 08h às 17h
+    passoMin: 30,                                 // grade de meia em meia hora
+    duracaoMin: 60,                               // duração de cada sessão
   },
   CAPACIDADE_POR_HORARIO: 1,        // atendimentos ao mesmo tempo
   FALTA_CONSOME: false,             // falta desconta sessão do pacote?
   SYNC_URL: '',                     // sincronização entre aparelhos (opcional)
 };
 ```
+
+Horário de funcionamento configurado: **segunda a sexta das 08h às 19h30**
+(primeira sessão 08h, última 18h30) e **sábado das 08h às 17h** (primeira
+08h, última 16h). A grade oferece horários de meia em meia hora e o app
+bloqueia automaticamente sobreposição de sessões.
 
 ## Como publicar (GitHub Pages)
 
