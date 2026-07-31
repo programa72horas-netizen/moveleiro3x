@@ -714,7 +714,7 @@ function renderInicio(cli) {
     areaCred.innerHTML =
       '<div class="vazio">Você ainda não tem um plano ativo.<br>Conheça nossos protocolos na aba <b>Planos</b>.</div>';
   } else {
-    areaCred.innerHTML = '<div class="cartao">' + pools.map(barraPool).join('') + '</div>';
+    areaCred.innerHTML = '<div class="cartao">' + pools.map((p) => barraPool(p)).join('') + '</div>';
   }
 }
 
