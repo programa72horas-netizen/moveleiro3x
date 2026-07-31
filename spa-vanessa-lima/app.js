@@ -1019,8 +1019,9 @@ function confirmarSerie() {
 
   const n = seriePendente.itens.length;
   const serieId = n > 1 ? uid() : null;
+  const criadas = [];
   for (const it of seriePendente.itens) {
-    salvarAgendamento({
+    const ag = {
       id: uid(),
       clienteId: cli.id,
       procId: seriePendente.procId,
@@ -1031,7 +1032,9 @@ function confirmarSerie() {
       poolIx: it.cobertura ? it.cobertura.poolIx : null,
       serieId,
       criadoEm: agora(),
-    });
+    };
+    criadas.push(ag);
+    salvarAgendamento(ag);
   }
   fecharModal('modal-serie');
   seriePendente = null;
@@ -1041,6 +1044,16 @@ function confirmarSerie() {
   toast(n > 1 ? 'Sessões agendadas.' : 'Sessão agendada.');
   mostrarAbaSessoes('proximas');
   irPara('sessoes');
+
+  // avisos com o app fechado: os alarmes da agenda do celular tocam sozinhos
+  confirmar('Avisos no celular',
+    'Os lembretes do app (1 dia e 2 horas antes) aparecem com o app aberto. ' +
+    'Para ser avisada <b>mesmo com o app fechado</b>, adicione ' +
+    (n > 1 ? 'suas sessões' : 'sua sessão') + ' à agenda do celular — os alarmes tocam sozinhos.',
+    [
+      { rotulo: 'Adicionar à agenda do celular', classe: 'btn', acao: () => baixarICS(criadas, cli) },
+      { rotulo: 'Agora não', classe: 'btn-suave', acao: null },
+    ]);
 }
 
 /* ------------------------------------------------------------
@@ -1248,7 +1261,16 @@ function verificarLembretes() {
     gravarJSON(CHAVE_LEMBRETES, flags);
     gravarJSON(CHAVE_BANNERS, banners);
     renderBanners();
+    return;
   }
+
+  // mesmo sem lembrete novo, expira banners de sessões que já começaram
+  const pendentes = lerJSON(CHAVE_BANNERS, []);
+  const haExpirado = pendentes.some((b) => {
+    const a = b.agId && DB.agendamentos.find((x) => x.id === b.agId);
+    return !(a && a.status === 'agendada' && deISO(a.data, a.hora).getTime() > agora());
+  });
+  if (haExpirado) renderBanners();
 }
 
 function notificar(titulo, corpo) {
@@ -1261,11 +1283,11 @@ function renderBanners() {
   const cli = clienteLogado();
   const area = $('#area-banners');
   if (!area) return;
-  // descarta banners de sessões que já passaram, foram canceladas ou concluídas
+  // descarta banners de sessões que já começaram, foram canceladas ou concluídas
   const todos = lerJSON(CHAVE_BANNERS, []);
   const validos = todos.filter((b) => {
     const a = b.agId && DB.agendamentos.find((x) => x.id === b.agId);
-    return a && a.status === 'agendada' && deISO(a.data, a.hora).getTime() + 60 * 60000 > agora();
+    return a && a.status === 'agendada' && deISO(a.data, a.hora).getTime() > agora();
   });
   if (validos.length !== todos.length) gravarJSON(CHAVE_BANNERS, validos);
   if (!cli) { area.innerHTML = ''; return; }
