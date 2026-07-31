@@ -13,8 +13,10 @@ const CONFIG = {
   // WhatsApp comercial do spa, com DDI + DDD (só números)
   WHATS_COMERCIAL: '555492285445',
 
-  // Código de acesso da equipe/recepção
-  PIN_EQUIPE: 'Sucesso2026@',
+  // Impressão digital (SHA-256) do código de acesso da equipe — o código em
+  // si NÃO fica no fonte. Para trocar: abra o console do navegador no app e
+  // rode  await gerarHashPin('NovoCodigo')  — cole o resultado aqui.
+  PIN_EQUIPE_HASH: '2ae48495678af6fd98c5c36afa297fc3bd32eca791711ee7ab5327ed97cc92c6',
 
   // Funcionamento do spa
   HORARIOS: {
@@ -143,6 +145,13 @@ function linkZap(numero, msg) {
   return 'https://wa.me/' + numero + '?text=' + encodeURIComponent(msg);
 }
 
+async function sha256Hex(texto) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+// usada só no console, para gerar um novo PIN_EQUIPE_HASH
+window.gerarHashPin = sha256Hex;
+
 function toast(msg) {
   const t = $('#toast');
   t.textContent = msg;
@@ -229,7 +238,18 @@ async function sincronizar() {
         gravarJSON(CHAVE_OUTBOX, atual.slice(fila.length));
       }
     }
-    const resp = await fetch(CONFIG.SYNC_URL + '?t=' + agora());
+    /* Privacidade: a lista completa de clientes (nomes e telefones) só é
+       devolvida pelo Apps Script mediante a chave da equipe; o aparelho de
+       uma cliente recebe apenas o próprio cadastro. Os agendamentos não
+       carregam dados pessoais (só ids, datas e procedimentos). */
+    let url = CONFIG.SYNC_URL + '?t=' + agora();
+    if (SESSAO && SESSAO.admin && SESSAO.chave) {
+      url += '&chave=' + encodeURIComponent(SESSAO.chave);
+    } else {
+      const cli = clienteLogado();
+      if (cli) url += '&whats=' + cli.whats;
+    }
+    const resp = await fetch(url);
     if (resp.ok) {
       const remoto = await resp.json();
       let mudou = false;
@@ -239,6 +259,19 @@ async function sincronizar() {
     }
   } catch (e) { /* sem rede ou URL indisponível — tenta de novo depois */ }
   sincronizando = false;
+}
+
+/* Busca pontual do cadastro no login: um aparelho novo não tem a cliente
+   no banco local, então pergunta ao servidor só por aquele número. */
+async function buscarClienteRemoto(whats) {
+  if (!CONFIG.SYNC_URL || !navigator.onLine) return;
+  try {
+    const resp = await fetch(CONFIG.SYNC_URL + '?t=' + agora() + '&whats=' + whats);
+    if (resp.ok) {
+      const remoto = await resp.json();
+      if (mesclar(DB.clientes, remoto.clientes, 'cliente')) salvarDB();
+    }
+  } catch (e) { /* sem rede — segue só com os dados locais */ }
 }
 
 /* Registros remotos são validados campo a campo: um endpoint comprometido
@@ -572,9 +605,12 @@ function renderPerfisConhecidos() {
   }
 }
 
-function entrar() {
+async function entrar() {
   const whats = normWhats($('#login-whats').value);
   if (whats.length < 12) { toast('Digite seu WhatsApp com DDD.'); return; }
+
+  // aparelho novo: procura este cadastro no servidor antes de criar outro
+  if (!clientePorWhats(whats)) await buscarClienteRemoto(whats);
 
   const existente = clientePorWhats(whats);
   if (existente) {
@@ -671,6 +707,36 @@ function sair() {
   $('#login-novo').hidden = true;
   renderPerfisConhecidos();
   mostrarTela('tela-login');
+}
+
+/* --- acesso da equipe: PIN conferido por hash + trava de tentativas --- */
+const CHAVE_TENTATIVAS = 'vl_pin_tentativas_v1';
+
+async function verificarPin() {
+  const trava = lerJSON(CHAVE_TENTATIVAS, { n: 0, ate: 0 });
+  if (trava.ate > agora()) {
+    const min = Math.ceil((trava.ate - agora()) / 60000);
+    toast('Muitas tentativas — aguarde ' + min + ' min e tente de novo.');
+    return;
+  }
+  const digitado = $('#pin-campo').value.trim();
+  if (!digitado) { toast('Digite o código de acesso.'); return; }
+  let hash = '';
+  try { hash = await sha256Hex(digitado); }
+  catch (e) { toast('Abra o app pelo endereço https para entrar como equipe.'); return; }
+  if (hash === CONFIG.PIN_EQUIPE_HASH) {
+    localStorage.removeItem(CHAVE_TENTATIVAS);
+    fecharModal('modal-pin');
+    // a senha também é a chave que libera os dados das clientes na
+    // sincronização (conferida pelo Apps Script, fora deste código público)
+    definirSessao({ admin: true, chave: digitado });
+    abrirAdmin();
+  } else {
+    trava.n = (trava.n || 0) + 1;
+    if (trava.n >= 5) { trava.ate = agora() + 5 * 60000; trava.n = 0; }
+    gravarJSON(CHAVE_TENTATIVAS, trava);
+    toast(trava.ate > agora() ? 'Código incorreto — acesso bloqueado por 5 minutos.' : 'Código incorreto.');
+  }
 }
 
 /* ------------------------------------------------------------
@@ -1710,15 +1776,7 @@ function ligarEventos() {
   $('#login-whats').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
   $('#login-nome').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
   $('#btn-abrir-equipe').addEventListener('click', () => { $('#pin-campo').value = ''; abrirModal('modal-pin'); });
-  $('#btn-pin-ok').addEventListener('click', () => {
-    if ($('#pin-campo').value.trim() === CONFIG.PIN_EQUIPE) {
-      fecharModal('modal-pin');
-      definirSessao({ admin: true });
-      abrirAdmin();
-    } else {
-      toast('Código incorreto.');
-    }
-  });
+  $('#btn-pin-ok').addEventListener('click', verificarPin);
   $('#pin-campo').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btn-pin-ok').click(); });
 
   // onboarding

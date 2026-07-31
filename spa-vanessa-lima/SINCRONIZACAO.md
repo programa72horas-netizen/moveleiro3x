@@ -7,6 +7,12 @@ agendamentos), usando uma planilha Google gratuita como "banco de dados".
 
 Leva uns 10 minutos e não precisa saber programar — é copiar e colar.
 
+**Como a privacidade é protegida:** a lista completa de clientes (nomes e
+telefones) só é entregue a quem apresentar o **código de acesso da equipe**,
+conferido dentro do Google (fora do código público do app). O celular de uma
+cliente recebe apenas o cadastro dela. Os agendamentos trafegam sem dados
+pessoais — só códigos internos, datas e procedimentos.
+
 ## Passo 1 — Criar a planilha
 
 1. Acesse [sheets.new](https://sheets.new) para criar uma planilha nova
@@ -16,11 +22,21 @@ Leva uns 10 minutos e não precisa saber programar — é copiar e colar.
 
 1. Na planilha, abra **Extensões → Apps Script**
 2. Apague o que estiver no editor e cole o código abaixo
-3. Salve (ícone de disquete)
+3. **Troque `TROQUE-AQUI` pelo mesmo código de acesso da equipe usado no app**
+4. Salve (ícone de disquete)
 
 ```js
-// ====== Spa Vanessa Lima — sincronização do app ======
+// ====== Spa Vanessa Lima — sincronização do app (v2) ======
 const ABA = 'dados';
+
+// ⚠️ O MESMO código de acesso da equipe usado no app.
+// É ele que libera a lista de clientes só para a recepção.
+const CHAVE_EQUIPE = 'TROQUE-AQUI';
+
+// limites anti-abuso
+const MAX_REGISTROS_POR_ENVIO = 300;
+const MAX_TAMANHO_REGISTRO = 20000; // caracteres por registro
+const MAX_LINHAS = 50000;           // teto de linhas na planilha
 
 function aba_() {
   const doc = SpreadsheetApp.getActiveSpreadsheet();
@@ -32,20 +48,30 @@ function aba_() {
   return aba;
 }
 
-function doGet() {
-  const aba = aba_();
-  const linhas = aba.getDataRange().getValues().slice(1);
+function resposta_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  const chave = (e && e.parameter && e.parameter.chave) || '';
+  const whats = String((e && e.parameter && e.parameter.whats) || '').replace(/\D/g, '');
+  const equipe = chave !== '' && chave === CHAVE_EQUIPE;
+
+  const linhas = aba_().getDataRange().getValues().slice(1);
   const saida = { clientes: [], agendamentos: [] };
   for (const [id, tipo, up, json] of linhas) {
     if (!id) continue;
     try {
       const reg = JSON.parse(json);
-      if (tipo === 'cliente') saida.clientes.push(reg);
       if (tipo === 'agendamento') saida.agendamentos.push(reg);
-    } catch (e) {}
+      // cadastros: tudo para a equipe; só o próprio para a cliente
+      if (tipo === 'cliente' && (equipe || (whats && reg.whats === whats))) {
+        saida.clientes.push(reg);
+      }
+    } catch (err) {}
   }
-  return ContentService.createTextOutput(JSON.stringify(saida))
-    .setMimeType(ContentService.MimeType.JSON);
+  return resposta_(saida);
 }
 
 function doPost(e) {
@@ -54,14 +80,19 @@ function doPost(e) {
   try {
     const corpo = JSON.parse(e.postData.contents);
     const aba = aba_();
+    if (aba.getLastRow() > MAX_LINHAS) return resposta_({ ok: false, erro: 'cheio' });
+
     const dados = aba.getDataRange().getValues();
     const posicao = {};
     for (let i = 1; i < dados.length; i++) posicao[dados[i][0]] = i + 1;
 
-    for (const item of (corpo.registros || [])) {
+    const registros = (corpo.registros || []).slice(0, MAX_REGISTROS_POR_ENVIO);
+    for (const item of registros) {
       const reg = item.dados;
       if (!reg || !reg.id) continue;
-      const linha = [reg.id, item.tipo, reg.up || 0, JSON.stringify(reg)];
+      const json = JSON.stringify(reg);
+      if (json.length > MAX_TAMANHO_REGISTRO) continue;
+      const linha = [reg.id, item.tipo, reg.up || 0, json];
       const pos = posicao[reg.id];
       if (pos) {
         const upAtual = Number(aba.getRange(pos, 3).getValue()) || 0;
@@ -71,8 +102,7 @@ function doPost(e) {
         posicao[reg.id] = aba.getLastRow();
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return resposta_({ ok: true });
   } finally {
     trava.releaseLock();
   }
@@ -88,9 +118,9 @@ function doPost(e) {
 5. Clique em **Implantar**, autorize com sua conta Google e **copie a URL**
    (termina com `/exec`)
 
-> "Qualquer pessoa" significa que quem tiver a URL consegue ler/gravar os
-> dados do app. A URL é longa e impossível de adivinhar, mas trate-a como
-> uma senha: só deixe no app.
+> "Qualquer pessoa" aqui significa que o app consegue gravar e ler sem
+> login Google — mas a lista de clientes continua protegida pela
+> `CHAVE_EQUIPE`, conferida dentro do script.
 
 ## Passo 4 — Colar a URL no app
 
@@ -102,12 +132,15 @@ SYNC_URL: 'https://script.google.com/macros/s/SUA-URL-AQUI/exec',
 
 Publique o app de novo (commit no GitHub) e pronto: todos os aparelhos que
 abrirem o app passam a sincronizar automaticamente (ao abrir, a cada minuto
-e logo depois de cada alteração).
+e logo depois de cada alteração). A recepção entra com o código da equipe e
+o app passa a usar esse código também para liberar os dados na sincronização.
 
 ## Dicas
 
 - Para testar: agende pelo celular e veja a linha aparecer na planilha; abra
-  o app no computador e o agendamento estará lá.
-- Se mudar a implantação no Apps Script, gere a URL de novo
+  o app no computador, entre como equipe e o agendamento estará lá.
+- Se trocar o código de acesso da equipe no app, troque também a
+  `CHAVE_EQUIPE` no Apps Script (e gere **Nova versão** da implantação).
+- Se mudar o código do Apps Script, publique de novo
   (**Implantar → Gerenciar implantações → editar → Nova versão**).
 - A planilha é o backup dos dados: não apague a aba `dados`.

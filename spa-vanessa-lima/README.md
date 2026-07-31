@@ -64,7 +64,9 @@ Tudo fica no início do arquivo [`app.js`](app.js):
 ```js
 const CONFIG = {
   WHATS_COMERCIAL: '555492285445',  // WhatsApp comercial do spa (DDI+DDD+número)
-  PIN_EQUIPE: '…',                  // código de acesso da recepção
+  PIN_EQUIPE_HASH: '…',             // impressão digital (SHA-256) do código da
+                                    // recepção — o código em si não fica no fonte;
+                                    // para trocar, veja SEGURANCA.md
   HORARIOS: {
     diasSemana: [1, 2, 3, 4, 5, 6],              // 0=dom, 1=seg … 6=sáb
     semana: { primeira: '08:00', ultima: '18:30' }, // seg–sex: 08h às 19h30
@@ -121,11 +123,14 @@ aparelhos passam a compartilhar clientes, planos e agendamentos.
 | `sw.js` | Funcionamento offline (PWA) |
 | `manifest.webmanifest` | Instalação na tela inicial |
 | `SINCRONIZACAO.md` | Passo a passo da sincronização entre aparelhos |
+| `SEGURANCA.md` | Proteções ativas, boas práticas e limitações |
 
-## Privacidade
+## Privacidade e segurança
 
 Os dados das clientes ficam no aparelho de quem usa o app (e, se a
 sincronização for ativada, na planilha Google **da sua conta**) — nada é
-enviado a servidores de terceiros. O código de acesso da equipe é uma
-proteção simples, adequada para o dia a dia da recepção, não para dados
-sensíveis.
+enviado a servidores de terceiros. O app usa política de segurança de
+conteúdo (CSP), código da equipe protegido por hash com trava de
+tentativas, validação de todos os dados sincronizados e sincronização que
+só entrega a lista de clientes mediante o código da equipe. Detalhes,
+boas práticas e limitações em [`SEGURANCA.md`](SEGURANCA.md).
