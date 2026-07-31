@@ -129,6 +129,7 @@ function fmtWhats(d) {
   return s;
 }
 function primeiroNome(nome) { return String(nome || '').trim().split(/\s+/)[0] || ''; }
+function todoDia(idx) { return (idx === 0 || idx === 6 ? 'Todo ' : 'Toda ') + DIAS_LONGO[idx]; }
 function iniciais(nome) {
   const p = String(nome || '').trim().split(/\s+/);
   return ((p[0] || ' ')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
@@ -157,6 +158,7 @@ const CHAVE_SESSAO = 'vl_sessao_v1';
 const CHAVE_LEMBRETES = 'vl_lembretes_v1';
 const CHAVE_BANNERS = 'vl_banners_v1';
 const CHAVE_OUTBOX = 'vl_outbox_v1';
+const CHAVE_PERFIS = 'vl_perfis_v1';
 
 let DB = { clientes: [], agendamentos: [] };
 
@@ -230,22 +232,89 @@ async function sincronizar() {
     if (resp.ok) {
       const remoto = await resp.json();
       let mudou = false;
-      mudou = mesclar(DB.clientes, remoto.clientes) || mudou;
-      mudou = mesclar(DB.agendamentos, remoto.agendamentos) || mudou;
+      mudou = mesclar(DB.clientes, remoto.clientes, 'cliente') || mudou;
+      mudou = mesclar(DB.agendamentos, remoto.agendamentos, 'agendamento') || mudou;
       if (mudou) { salvarDB(); renderizarTudo(); }
     }
   } catch (e) { /* sem rede ou URL indisponível — tenta de novo depois */ }
   sincronizando = false;
 }
 
-function mesclar(locais, remotos) {
+/* Registros remotos são validados campo a campo: um endpoint comprometido
+   (ou uma linha editada na planilha) não pode injetar HTML nem dados fora
+   do formato esperado. */
+const RE_ID = /^[a-z0-9:_-]{4,60}$/i;
+const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
+const RE_HORA = /^\d{2}:\d{2}$/;
+const STATUS_VALIDOS = ['agendada', 'concluida', 'cancelada', 'falta'];
+
+function idLimpo(v) { return RE_ID.test(String(v || '')) ? String(v) : null; }
+function slug(v) { return String(v || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 30); }
+
+function sanearRegistro(tipo, r) {
+  if (!r || typeof r !== 'object' || !idLimpo(r.id)) return null;
+  if (tipo === 'agendamento') {
+    if (!idLimpo(r.clienteId)) return null;
+    if (!RE_DATA.test(String(r.data || '')) || !RE_HORA.test(String(r.hora || ''))) return null;
+    if (!STATUS_VALIDOS.includes(r.status)) return null;
+    return {
+      id: String(r.id), clienteId: String(r.clienteId), procId: slug(r.procId),
+      data: r.data, hora: r.hora, status: r.status,
+      planoId: idLimpo(r.planoId), poolIx: Number.isInteger(r.poolIx) ? r.poolIx : null,
+      serieId: idLimpo(r.serieId), criadoEm: Number(r.criadoEm) || 0, up: Number(r.up) || 0,
+    };
+  }
+  const planos = (Array.isArray(r.planos) ? r.planos : []).map((p) => {
+    if (!p || !idLimpo(p.id)) return null;
+    const pools = (Array.isArray(p.pools) ? p.pools : []).map((b) => ({
+      label: String((b && b.label) || '').slice(0, 40),
+      procs: b && b.procs === 'todos' ? 'todos' : (Array.isArray(b && b.procs) ? b.procs.map(slug) : []),
+      qtd: Number(b && b.qtd) || 0,
+      ajuste: Number(b && b.ajuste) || 0,
+    }));
+    return {
+      id: String(p.id), pacoteId: slug(p.pacoteId), nome: String(p.nome || '').slice(0, 60),
+      pools, compradoEm: Number(p.compradoEm) || 0,
+      origem: slug(p.origem), removido: !!p.removido,
+    };
+  }).filter(Boolean);
+  return {
+    id: String(r.id), nome: String(r.nome || '').slice(0, 120),
+    whats: String(r.whats || '').replace(/\D/g, '').slice(0, 15),
+    criadoEm: Number(r.criadoEm) || 0, planos,
+    onboarded: !!r.onboarded, removido: !!r.removido, up: Number(r.up) || 0,
+  };
+}
+
+/* Planos ficam dentro do registro da cliente; a união por id garante que a
+   compra registrada num aparelho não seja apagada por gravação de outro. */
+function unirPlanos(preferidos, outros) {
+  const mapa = new Map((preferidos || []).map((p) => [p.id, p]));
+  for (const p of (outros || [])) if (!mapa.has(p.id)) mapa.set(p.id, p);
+  return Array.from(mapa.values());
+}
+
+function mesclar(locais, remotos, tipo) {
   if (!Array.isArray(remotos)) return false;
   let mudou = false;
-  for (const r of remotos) {
-    if (!r || !r.id) continue;
+  for (const bruto of remotos) {
+    const r = sanearRegistro(tipo, bruto);
+    if (!r) continue;
     const i = locais.findIndex((l) => l.id === r.id);
-    if (i < 0) { locais.push(r); mudou = true; }
-    else if ((r.up || 0) > (locais[i].up || 0)) { locais[i] = r; mudou = true; }
+    if (i < 0) { locais.push(r); mudou = true; continue; }
+    const l = locais[i];
+    if (tipo === 'cliente') {
+      const base = (r.up || 0) > (l.up || 0) ? r : l;
+      const outro = base === r ? l : r;
+      const unido = Object.assign({}, base, {
+        planos: unirPlanos(base.planos, outro.planos),
+        onboarded: !!(base.onboarded || outro.onboarded),
+      });
+      if (JSON.stringify(unido) !== JSON.stringify(l)) { locais[i] = unido; mudou = true; }
+      if (JSON.stringify(unido) !== JSON.stringify(r)) enfileirar('cliente', unido);
+    } else if ((r.up || 0) > (l.up || 0)) {
+      locais[i] = r; mudou = true;
+    }
   }
   return mudou;
 }
@@ -289,16 +358,18 @@ function poolCobre(pool, procId) {
   return pool.procs === 'todos' || pool.procs.includes(procId);
 }
 
-/** Escolhe a bolsa que cobre um procedimento (específicas antes das "todos", plano mais antigo primeiro). */
+/** Escolhe a bolsa que cobre um procedimento: a mais específica primeiro
+    (pacote dedicado antes do flexível, "todos" por último), depois o plano
+    mais antigo — preserva os créditos flexíveis. */
 function coberturaParaProc(cli, procId, tally) {
   tally = tally || {};
+  const largura = (p) => (p.pool.procs === 'todos' ? Infinity : p.pool.procs.length);
   const candidatos = poolsDoCliente(cli)
     .filter((p) => poolCobre(p.pool, procId))
     .filter((p) => p.restantes - (tally[p.chave] || 0) > 0)
     .sort((a, b) => {
-      const espA = a.pool.procs === 'todos' ? 1 : 0;
-      const espB = b.pool.procs === 'todos' ? 1 : 0;
-      if (espA !== espB) return espA - espB;
+      const wA = largura(a), wB = largura(b);
+      if (wA !== wB) return wA - wB;
       return (a.plano.compradoEm || 0) - (b.plano.compradoEm || 0);
     });
   return candidatos[0] || null;
@@ -312,6 +383,29 @@ function restantesParaProc(cli, procId) {
 
 function restantesTotais(cli) {
   return poolsDoCliente(cli).reduce((s, p) => s + p.restantes, 0);
+}
+
+/** Sessões compradas e ainda não realizadas (inclui as já agendadas) —
+    é a métrica certa para falar de renovação. */
+function porRealizar(cli) {
+  return poolsDoCliente(cli).reduce((s, p) => s + Math.max(0, p.total - p.usadas), 0);
+}
+
+/** Reaproveita crédito devolvido/novo: sessões futuras gravadas como avulsas
+    passam a consumir o plano assim que houver saldo (cancelamento, falta sem
+    desconto ou compra de pacote). */
+function promoverAvulsas(cli) {
+  if (!cli) return;
+  const futuras = agsDoCliente(cli.id)
+    .filter((a) => a.status === 'agendada' && !a.planoId && deISO(a.data, a.hora) > new Date())
+    .sort((a, b) => deISO(a.data, a.hora) - deISO(b.data, b.hora));
+  for (const a of futuras) {
+    const cob = coberturaParaProc(cli, a.procId);
+    if (!cob) continue;
+    a.planoId = cob.plano.id;
+    a.poolIx = cob.poolIx;
+    salvarAgendamento(a);
+  }
 }
 
 function criarPlano(pacoteId, origem) {
@@ -373,9 +467,21 @@ let SESSAO = lerJSON(CHAVE_SESSAO, null);
 function definirSessao(s) {
   SESSAO = s;
   if (s) gravarJSON(CHAVE_SESSAO, s); else localStorage.removeItem(CHAVE_SESSAO);
+  if (s && s.clienteId) registrarPerfilLocal(s.clienteId);
 }
 function clienteLogado() {
-  return SESSAO && SESSAO.clienteId ? clientePorId(SESSAO.clienteId) : null;
+  if (!SESSAO || !SESSAO.clienteId) return null;
+  const c = clientePorId(SESSAO.clienteId);
+  return c && !c.removido ? c : null;
+}
+
+/* perfis que já logaram NESTE aparelho (não expõe as demais clientes) */
+function registrarPerfilLocal(clienteId) {
+  const ids = lerJSON(CHAVE_PERFIS, []);
+  if (!ids.includes(clienteId)) {
+    ids.unshift(clienteId);
+    gravarJSON(CHAVE_PERFIS, ids.slice(0, 6));
+  }
 }
 
 /* ------------------------------------------------------------
@@ -406,6 +512,7 @@ function renderizarVista(vista) {
 
 function renderizarTudo() {
   if (SESSAO && SESSAO.admin) { renderAdmin(); return; }
+  if (SESSAO && SESSAO.clienteId && !clienteLogado()) { sair(); return; } // perfil arquivado noutro aparelho
   const cli = clienteLogado();
   if (cli && $('#tela-app').classList.contains('ativa')) {
     renderizarVista(vistaAtual);
@@ -440,7 +547,10 @@ function confirmar(titulo, texto, botoes) {
    ------------------------------------------------------------ */
 function renderPerfisConhecidos() {
   const area = $('#login-perfis');
-  const conhecidos = DB.clientes.filter((c) => !c.removido).slice(0, 6);
+  const conhecidos = lerJSON(CHAVE_PERFIS, [])
+    .map((id) => clientePorId(id))
+    .filter((c) => c && !c.removido)
+    .slice(0, 6);
   area.innerHTML = '';
   for (const c of conhecidos) {
     const b = document.createElement('button');
@@ -459,6 +569,17 @@ function entrar() {
   if (existente) {
     definirSessao({ clienteId: existente.id });
     if (existente.onboarded) abrirApp(); else abrirOnboarding(existente);
+    return;
+  }
+
+  // perfil arquivado com este número → reativa em vez de duplicar
+  const arquivada = DB.clientes.find((c) => c.whats === whats && c.removido);
+  if (arquivada) {
+    arquivada.removido = false;
+    salvarCliente(arquivada);
+    definirSessao({ clienteId: arquivada.id });
+    toast('Que bom te ver de novo, ' + primeiroNome(arquivada.nome) + '! 💛');
+    if (arquivada.onboarded) abrirApp(); else abrirOnboarding(arquivada);
     return;
   }
 
@@ -588,7 +709,7 @@ function renderInicio(cli) {
 
 function barraPool(p) {
   const disponiveis = p.restantes + p.reservadas; // ainda não concluídas
-  const pct = p.total ? Math.round((disponiveis / p.total) * 100) : 0;
+  const pct = Math.min(100, Math.max(0, p.total ? Math.round((disponiveis / p.total) * 100) : 0));
   return (
     '<div class="pool">' +
       '<div class="pool-topo"><strong>' + esc(p.nomePacote) + (p.label !== 'Sessões' ? ' · ' + esc(p.label) : '') + '</strong>' +
@@ -717,7 +838,7 @@ function atualizarRecorrencia(cli) {
   }
   const partes = [];
   if (agSel.data && agSel.hora) {
-    partes.push('Toda <b>' + DIAS_LONGO[deISO(agSel.data).getDay()] + '</b> às <b>' + agSel.hora + '</b>.');
+    partes.push('<b>' + todoDia(deISO(agSel.data).getDay()) + '</b> às <b>' + agSel.hora + '</b>.');
   }
   if (agSel.procId) {
     partes.push(rest > 0
@@ -735,6 +856,13 @@ function revisarAgendamento() {
   if (!agSel.procId) { toast('Escolha o procedimento 💆‍♀️'); return; }
   if (!agSel.data) { toast('Escolha o dia no calendário 🗓️'); return; }
   if (!agSel.hora) { toast('Escolha o horário ⏰'); return; }
+  // o app pode ter ficado aberto: o horário escolhido já passou ou foi ocupado?
+  if (deISO(agSel.data, agSel.hora) <= new Date() || !horarioLivre(agSel.data, agSel.hora)) {
+    toast('Esse horário não está mais disponível — escolha outro ⏰');
+    agSel.hora = null;
+    renderAgendar(cli);
+    return;
+  }
 
   const recorrente = $('#ag-rec').checked;
   let qtd = 1;
@@ -763,7 +891,7 @@ function revisarAgendamento() {
       '<strong style="font-weight:500">' + esc(nomeProc(agSel.procId)) + '</strong><br>' +
       '<small class="texto-suave">' +
       (recorrente
-        ? 'Toda ' + DIAS_LONGO[d0.getDay()] + ' às ' + agSel.hora + ' · ' + itens.length + ' sessões'
+        ? todoDia(d0.getDay()) + ' às ' + agSel.hora + ' · ' + itens.length + ' sessões'
         : fmtDataLonga(datas[0]) + ' · ' + agSel.hora) +
       '</small></div>' +
     (puladas.length
@@ -787,7 +915,30 @@ function revisarAgendamento() {
 function confirmarSerie() {
   const cli = clienteLogado();
   if (!cli || !seriePendente) return;
-  const serieId = seriePendente.itens.length > 1 ? uid() : null;
+
+  // revalida: entre a revisão e o confirmar, um horário pode ter passado
+  // ou sido ocupado (app aberto há tempo, sincronização com outro aparelho)
+  const agoraD = new Date();
+  const invalida = seriePendente.itens.some(
+    (it) => deISO(it.data, it.hora) <= agoraD || !horarioLivre(it.data, it.hora)
+  );
+  if (invalida) {
+    fecharModal('modal-serie');
+    seriePendente = null;
+    toast('Um dos horários ficou indisponível — revise o agendamento 🙏');
+    renderAgendar(cli);
+    return;
+  }
+
+  // recomputa a cobertura com o estado mais recente dos créditos
+  const tally = {};
+  for (const it of seriePendente.itens) {
+    it.cobertura = coberturaParaProc(cli, seriePendente.procId, tally);
+    if (it.cobertura) tally[it.cobertura.chave] = (tally[it.cobertura.chave] || 0) + 1;
+  }
+
+  const n = seriePendente.itens.length;
+  const serieId = n > 1 ? uid() : null;
   for (const it of seriePendente.itens) {
     salvarAgendamento({
       id: uid(),
@@ -807,13 +958,21 @@ function confirmarSerie() {
   agSel.data = null; agSel.hora = null;
   $('#ag-rec').checked = false;
   const campo = $('#ag-rec-qtd'); campo.value = ''; campo._auto = false;
-  toast('Sessões agendadas! Até breve 💛');
+  toast(n > 1 ? 'Sessões agendadas! Até breve 💛' : 'Sessão agendada! Até breve 💛');
+  mostrarAbaSessoes('proximas');
   irPara('sessoes');
 }
 
 /* ------------------------------------------------------------
    Vista: Minhas sessões
    ------------------------------------------------------------ */
+function mostrarAbaSessoes(qual) {
+  $('#aba-proximas').classList.toggle('ativa', qual === 'proximas');
+  $('#aba-historico').classList.toggle('ativa', qual === 'historico');
+  $('#lista-proximas').hidden = qual !== 'proximas';
+  $('#lista-historico').hidden = qual !== 'historico';
+}
+
 function renderProximas(cli) {
   const lista = $('#lista-proximas');
   const prox = proximasDoCliente(cli);
@@ -881,12 +1040,13 @@ function pedirCancelamento(agId) {
   }
   botoes.push({ rotulo: 'Voltar', classe: 'btn-suave', acao: null });
   confirmar('Cancelar sessão',
-    esc(nomeProc(a.procId)) + ' · ' + fmtDataLonga(a.data) + ' às ' + a.hora +
-    '.<br>A sessão volta para o seu saldo. Deseja cancelar?', botoes);
+    esc(nomeProc(a.procId)) + ' · ' + fmtDataLonga(a.data) + ' às ' + esc(a.hora) +
+    '.<br>' + (a.planoId ? 'A sessão volta para o seu saldo. ' : '') + 'Deseja cancelar?', botoes);
 }
 
 function cancelarAgs(lista) {
   for (const a of lista) { a.status = 'cancelada'; salvarAgendamento(a); }
+  if (lista.length) promoverAvulsas(clientePorId(lista[0].clienteId));
   toast(lista.length > 1 ? lista.length + ' sessões canceladas.' : 'Sessão cancelada.');
   renderizarTudo();
 }
@@ -992,14 +1152,14 @@ function verificarLembretes() {
     const f = flags[a.id] || (flags[a.id] = {});
     if (mins <= 120 && !f.h2) {
       f.h2 = true; f.d1 = true; mudou = true;
-      const texto = '⏰ É hoje! Sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é às <b>' + a.hora + '</b>.';
-      banners.push({ id: uid(), clienteId: cli.id, texto });
+      const texto = '⏰ É hoje! Sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é às <b>' + esc(a.hora) + '</b>.';
+      banners.push({ id: uid(), clienteId: cli.id, agId: a.id, texto });
       notificar('É quase hora do seu momento ✨', 'Sua sessão de ' + nomeProc(a.procId) + ' é hoje às ' + a.hora + '.');
     } else if (mins <= 1440 && !f.d1) {
       f.d1 = true; mudou = true;
       const quando = a.data === hojeISO() ? 'hoje' : 'amanhã';
-      const texto = '🌿 Lembrete: sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é <b>' + quando + '</b> às <b>' + a.hora + '</b>.';
-      banners.push({ id: uid(), clienteId: cli.id, texto });
+      const texto = '🌿 Lembrete: sua sessão de <b>' + esc(nomeProc(a.procId)) + '</b> é <b>' + quando + '</b> às <b>' + esc(a.hora) + '</b>.';
+      banners.push({ id: uid(), clienteId: cli.id, agId: a.id, texto });
       notificar('Seu momento está chegando 🌿', 'Sessão de ' + nomeProc(a.procId) + ' ' + quando + ' às ' + a.hora + '.');
     }
   }
@@ -1020,8 +1180,16 @@ function notificar(titulo, corpo) {
 function renderBanners() {
   const cli = clienteLogado();
   const area = $('#area-banners');
-  if (!cli || !area) return;
-  const banners = lerJSON(CHAVE_BANNERS, []).filter((b) => b.clienteId === cli.id);
+  if (!area) return;
+  // descarta banners de sessões que já passaram, foram canceladas ou concluídas
+  const todos = lerJSON(CHAVE_BANNERS, []);
+  const validos = todos.filter((b) => {
+    const a = b.agId && DB.agendamentos.find((x) => x.id === b.agId);
+    return a && a.status === 'agendada' && deISO(a.data, a.hora).getTime() + 60 * 60000 > agora();
+  });
+  if (validos.length !== todos.length) gravarJSON(CHAVE_BANNERS, validos);
+  if (!cli) { area.innerHTML = ''; return; }
+  const banners = validos.filter((b) => b.clienteId === cli.id);
   area.innerHTML = '';
   for (const b of banners) {
     const div = document.createElement('div');
@@ -1051,10 +1219,12 @@ function baixarICS(ags, cli) {
     const carimbo = (d) =>
       d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') +
       'T' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + '00';
+    // DTSTAMP precisa ser UTC (RFC 5545); DTSTART/DTEND ficam em hora local
+    const dtstampUTC = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
     linhas.push(
       'BEGIN:VEVENT',
       'UID:' + a.id + '@spa-vanessa-lima',
-      'DTSTAMP:' + carimbo(new Date()),
+      'DTSTAMP:' + dtstampUTC,
       'DTSTART:' + carimbo(ini),
       'DTEND:' + carimbo(fim),
       'SUMMARY:' + nomeProc(a.procId) + ' — Spa Vanessa Lima',
@@ -1140,10 +1310,10 @@ function renderAdmPainel() {
     }).join('');
   }
 
-  // renovações
+  // renovações — conta sessões ainda não realizadas (agendada não é gasta)
   const renovar = DB.clientes
     .filter((c) => !c.removido && (c.planos || []).some((p) => !p.removido))
-    .map((c) => ({ c, rest: restantesTotais(c) }))
+    .map((c) => ({ c, rest: porRealizar(c) }))
     .filter((x) => x.rest <= 2)
     .sort((a, b) => a.rest - b.rest);
 
@@ -1210,7 +1380,8 @@ function renderAdmAgenda() {
       if (!a) return;
       const c = clientePorId(a.clienteId);
       confirmar('Cancelar sessão',
-        esc((c ? c.nome : '') + ' · ' + nomeProc(a.procId)) + ' · ' + a.hora + '<br>A sessão volta para o saldo da cliente.',
+        esc((c ? c.nome : '') + ' · ' + nomeProc(a.procId)) + ' · ' + esc(a.hora) +
+        (a.planoId ? '<br>A sessão volta para o saldo da cliente.' : '<br>Sessão avulsa — não há saldo a devolver.'),
         [
           { rotulo: 'Cancelar sessão', classe: 'btn', acao: () => mudarStatus(a.id, 'cancelada') },
           { rotulo: 'Voltar', classe: 'btn-suave', acao: null },
@@ -1222,7 +1393,17 @@ function mudarStatus(agId, status) {
   const a = DB.agendamentos.find((x) => x.id === agId);
   if (!a) return;
   a.status = status;
+  const cli = clientePorId(a.clienteId);
+  // sessão avulsa concluída: se agora houver crédito livre, consome o plano
+  if (status === 'concluida' && !a.planoId && cli) {
+    const cob = coberturaParaProc(cli, a.procId);
+    if (cob) { a.planoId = cob.plano.id; a.poolIx = cob.poolIx; }
+  }
   salvarAgendamento(a);
+  // crédito devolvido pode cobrir sessões futuras gravadas como avulsas
+  if (cli && (status === 'cancelada' || (status === 'falta' && !CONFIG.FALTA_CONSOME))) {
+    promoverAvulsas(cli);
+  }
   const rotulos = { concluida: 'Sessão concluída ✓', falta: 'Falta registrada', cancelada: 'Sessão cancelada' };
   toast(rotulos[status] || 'Atualizado');
   renderAdmin();
@@ -1243,7 +1424,8 @@ function abrirEncaixe() {
     .map((c) => '<option value="' + c.id + '">' + esc(c.nome) + '</option>').join('');
   $('#enc-proc').innerHTML = PROCEDIMENTOS
     .map((p) => '<option value="' + p.id + '">' + esc(p.nome) + '</option>').join('');
-  $('#enc-data').value = admDia;
+  $('#enc-data').min = hojeISO();
+  $('#enc-data').value = admDia >= hojeISO() ? admDia : hojeISO();
   atualizarHorasEncaixe();
   abrirModal('modal-encaixe');
 }
@@ -1251,9 +1433,13 @@ function abrirEncaixe() {
 function atualizarHorasEncaixe() {
   const data = $('#enc-data').value;
   const agoraD = new Date();
+  const fechado = data && !diaAberto(deISO(data));
   $('#enc-hora').innerHTML = horariosDoDia().map((h) => {
-    const livre = data && horarioLivre(data, h) && deISO(data, h) > agoraD;
-    return '<option value="' + h + '"' + (livre ? '' : ' disabled') + '>' + h + (livre ? '' : ' — ocupado') + '</option>';
+    const passado = !data || deISO(data, h) <= agoraD;
+    const ocupado = data && !horarioLivre(data, h);
+    const ok = data && !fechado && !passado && !ocupado;
+    const sufixo = fechado ? ' — fechado' : ocupado ? ' — ocupado' : (data && passado) ? ' — já passou' : '';
+    return '<option value="' + h + '"' + (ok ? '' : ' disabled') + '>' + h + sufixo + '</option>';
   }).join('');
 }
 
@@ -1265,6 +1451,8 @@ function salvarEncaixe() {
   const cli = clientePorId(clienteId);
   if (!cli) { toast('Cadastre a cliente primeiro (aba Clientes).'); return; }
   if (!data || !hora) { toast('Escolha data e horário.'); return; }
+  if (!diaAberto(deISO(data))) { toast('O spa não abre neste dia (' + DIAS_LONGO[deISO(data).getDay()] + ').'); return; }
+  if (deISO(data, hora) <= new Date()) { toast('Esse horário já passou — escolha outro.'); return; }
   if (!horarioLivre(data, hora)) { toast('Este horário acabou de ser ocupado.'); return; }
   const cob = coberturaParaProc(cli, procId);
   salvarAgendamento({
@@ -1282,9 +1470,10 @@ function salvarEncaixe() {
 /* --- lista e ficha de clientes --- */
 function renderAdmClientes() {
   const termo = ($('#adm-busca').value || '').trim().toLowerCase();
+  const dig = termo.replace(/\D/g, '');
   const lista = DB.clientes
     .filter((c) => !c.removido)
-    .filter((c) => !termo || c.nome.toLowerCase().includes(termo) || c.whats.includes(termo.replace(/\D/g, '')))
+    .filter((c) => !termo || c.nome.toLowerCase().includes(termo) || (dig && c.whats.includes(dig)))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
   const area = $('#adm-lista-clientes');
@@ -1327,8 +1516,19 @@ function abrirNovaCliente() {
     if (nome.length < 3) { toast('Digite o nome completo.'); return; }
     if (whats.length < 12) { toast('Digite o WhatsApp com DDD.'); return; }
     if (clientePorWhats(whats)) { toast('Já existe cliente com este WhatsApp.'); return; }
-    const nova = { id: uid(), nome, whats, criadoEm: agora(), planos: [], onboarded: true };
     const pac = $('#nc-pacote').value;
+    // cadastro com número de cliente arquivada → reativa o perfil antigo
+    const arquivada = DB.clientes.find((c) => c.whats === whats && c.removido);
+    if (arquivada) {
+      arquivada.removido = false;
+      if (pac) { arquivada.planos = arquivada.planos || []; arquivada.planos.push(criarPlano(pac, 'admin')); }
+      salvarCliente(arquivada);
+      fecharModal('modal-cliente');
+      toast('Cliente reativada ✓ (o histórico dela foi mantido)');
+      renderAdmClientes();
+      return;
+    }
+    const nova = { id: uid(), nome, whats, criadoEm: agora(), planos: [], onboarded: true };
     if (pac) nova.planos.push(criarPlano(pac, 'admin'));
     salvarCliente(nova);
     fecharModal('modal-cliente');
@@ -1384,7 +1584,7 @@ function abrirFichaCliente(id) {
           '<div class="pool">' +
             '<div class="pool-topo"><strong>' + esc(p.nomePacote) + (p.label !== 'Sessões' ? ' · ' + esc(p.label) : '') + '</strong>' +
             '<span>' + p.restantes + ' restantes</span></div>' +
-            '<div class="pool-barra"><i style="width:' + (p.total ? Math.round(((p.restantes + p.reservadas) / p.total) * 100) : 0) + '%"></i></div>' +
+            '<div class="pool-barra"><i style="width:' + Math.min(100, Math.max(0, p.total ? Math.round(((p.restantes + p.reservadas) / p.total) * 100) : 0)) + '%"></i></div>' +
             '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">' +
               '<small class="texto-suave" style="font-size:.78rem">' + p.usadas + ' concluídas · ' + p.reservadas + ' agendadas · ' + p.total + ' no total</small>' +
               '<span style="display:flex;gap:4px;flex:none">' +
@@ -1428,7 +1628,14 @@ function abrirFichaCliente(id) {
       const plano = (c.planos || []).find((p) => p.id === planoId);
       if (!plano) return;
       const pool = plano.pools[Number(ixStr)];
-      pool.ajuste = (pool.ajuste || 0) + Number(b.dataset.delta);
+      const delta = Number(b.dataset.delta);
+      // não deixa o total ficar abaixo do que já foi concluído + agendado
+      const info = poolsDoCliente(c).find((p) => p.chave === b.dataset.ajuste);
+      if (delta < 0 && info && info.total + delta < info.usadas + info.reservadas) {
+        toast('Há ' + (info.usadas + info.reservadas) + ' sessões concluídas ou agendadas neste pacote — cancele ou conclua antes de reduzir o saldo.');
+        return;
+      }
+      pool.ajuste = (pool.ajuste || 0) + delta;
       salvarCliente(c);
       toast('Saldo ajustado ✓');
       abrirFichaCliente(id);
@@ -1445,6 +1652,7 @@ function abrirFichaCliente(id) {
             c.planos = c.planos || [];
             c.planos.push(criarPlano(pacId, 'admin'));
             salvarCliente(c);
+            promoverAvulsas(c); // sessões futuras avulsas passam a usar o plano novo
             toast('Pacote adicionado ✓');
             abrirFichaCliente(id);
             renderAdmClientes();
@@ -1513,14 +1721,8 @@ function ligarEventos() {
   $('#btn-ag-continuar').addEventListener('click', revisarAgendamento);
   $('#btn-serie-confirmar').addEventListener('click', confirmarSerie);
 
-  $('#aba-proximas').addEventListener('click', () => {
-    $('#aba-proximas').classList.add('ativa'); $('#aba-historico').classList.remove('ativa');
-    $('#lista-proximas').hidden = false; $('#lista-historico').hidden = true;
-  });
-  $('#aba-historico').addEventListener('click', () => {
-    $('#aba-historico').classList.add('ativa'); $('#aba-proximas').classList.remove('ativa');
-    $('#lista-historico').hidden = false; $('#lista-proximas').hidden = true;
-  });
+  $('#aba-proximas').addEventListener('click', () => mostrarAbaSessoes('proximas'));
+  $('#aba-historico').addEventListener('click', () => mostrarAbaSessoes('historico'));
 
   // admin
   $('#btn-adm-sair').addEventListener('click', () => { definirSessao(null); sair(); });

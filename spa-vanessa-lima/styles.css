@@ -7,7 +7,7 @@
   --painel:    #fffdf8;
   --painel-2:  #fbf6ec;
   --tinta:     #453f36;
-  --suave:     #8d8375;
+  --suave:     #6f665a;
   --ouro:      #b3924f;
   --ouro-2:    #8f7136;
   --ouro-claro:#ecdfc2;
@@ -495,9 +495,9 @@ a { color: var(--ouro-2); }
   position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
   z-index: 80;
   background: #3d372e; color: #f6f1e8;
-  padding: 11px 20px; border-radius: 999px;
-  font-size: .9rem; white-space: nowrap; max-width: 92vw;
-  overflow: hidden; text-overflow: ellipsis;
+  padding: 11px 20px; border-radius: 18px;
+  font-size: .9rem; max-width: 92vw; width: max-content;
+  text-align: center; line-height: 1.4;
   opacity: 0; pointer-events: none;
   transition: opacity .25s, transform .25s;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .25);

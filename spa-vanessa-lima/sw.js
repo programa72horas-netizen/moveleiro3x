@@ -17,11 +17,15 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // não intercepta outras origens (fontes do Google, URL de sincronização…)
+  if (new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then((resp) => {
-        const copia = resp.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copia)).catch(() => {});
+        if (resp.ok) {
+          const copia = resp.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copia)).catch(() => {});
+        }
         return resp;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
