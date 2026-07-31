@@ -10,11 +10,11 @@
    CONFIGURAÇÃO — edite aqui antes de publicar
    ------------------------------------------------------------ */
 const CONFIG = {
-  // ⚠️ WhatsApp comercial do spa, com DDI + DDD (só números)
-  WHATS_COMERCIAL: '5548999999999',
+  // WhatsApp comercial do spa, com DDI + DDD (só números)
+  WHATS_COMERCIAL: '555492285445',
 
-  // ⚠️ Código de acesso da equipe/recepção — troque antes de publicar!
-  PIN_EQUIPE: 'VL2026',
+  // Código de acesso da equipe/recepção
+  PIN_EQUIPE: 'Sucesso2026@',
 
   // Funcionamento do spa
   HORARIOS: {
