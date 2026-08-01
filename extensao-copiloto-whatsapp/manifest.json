@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Copiloto de Vendas — WhatsApp",
+  "version": "0.1.0",
+  "description": "IA que analisa a conversa aberta no WhatsApp Web e sugere a próxima resposta com base no seu playbook de vendas.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "css": ["sidebar.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Copiloto de Vendas — abrir configurações"
+  }
+}

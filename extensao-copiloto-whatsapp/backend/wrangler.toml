@@ -1,0 +1,30 @@
+# Configuração do Cloudflare Worker de licenciamento.
+#
+# Passo a passo (uma vez):
+#   1. npm install -g wrangler && wrangler login
+#   2. wrangler kv namespace create LICENCAS
+#      wrangler kv namespace create USO
+#      → cole os IDs gerados nos blocos abaixo
+#   3. wrangler secret put ANTHROPIC_API_KEY   (cole sua chave sk-ant-...)
+#   4. wrangler deploy
+#
+# Criar uma licença de teste:
+#   wrangler kv key put --binding=LICENCAS "LIC-TESTE-123" \
+#     '{"ativa": true, "cliente": "Beta", "plano": "mensal"}'
+
+name = "copiloto-vendas-whatsapp"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Modelo servido aos assinantes (trava de custo — o cliente não escolhe).
+# claude-opus-5 = melhor qualidade | claude-haiku-4-5 = melhor margem no plano de R$ 88.
+[vars]
+MODELO_PERMITIDO = "claude-opus-5"
+
+[[kv_namespaces]]
+binding = "LICENCAS"
+id = "COLE_O_ID_AQUI"
+
+[[kv_namespaces]]
+binding = "USO"
+id = "COLE_O_ID_AQUI"

@@ -1,0 +1,206 @@
+/* Sidebar do Copiloto de Vendas dentro do WhatsApp Web.
+   Prefixo cw- em tudo para não colidir com as classes do WhatsApp. */
+
+#cw-botao-flutuante {
+  position: fixed;
+  right: 18px;
+  bottom: 90px;
+  z-index: 2147483646;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: #1f2937;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s ease;
+}
+#cw-botao-flutuante:hover {
+  transform: scale(1.08);
+}
+
+#cw-painel {
+  position: fixed;
+  right: 18px;
+  bottom: 152px;
+  z-index: 2147483646;
+  width: 360px;
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+#cw-painel.cw-oculto {
+  display: none;
+}
+
+.cw-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #0b1220;
+  border-bottom: 1px solid #1f2a3d;
+}
+.cw-titulo {
+  flex: 1;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+}
+.cw-botao-icone {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.cw-botao-icone:hover {
+  background: #1f2a3d;
+  color: #fff;
+}
+
+.cw-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1f2a3d;
+}
+.cw-botao-acao {
+  border: 1px solid #2b3a55;
+  background: #16233a;
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cw-botao-acao:hover {
+  background: #1e3a5f;
+}
+
+.cw-resultado {
+  padding: 12px 14px 16px;
+  overflow-y: auto;
+}
+
+.cw-dica,
+.cw-carregando {
+  color: #9ca3af;
+  margin: 6px 0;
+}
+.cw-carregando::after {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  animation: cw-pontos 1.2s steps(4) infinite;
+}
+@keyframes cw-pontos {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+}
+
+.cw-erro {
+  color: #fca5a5;
+  background: #3b1219;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+}
+
+.cw-linha-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.cw-selo {
+  font-weight: 700;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.cw-temp-frio { background: #0c4a6e; color: #bae6fd; }
+.cw-temp-morno { background: #78350f; color: #fde68a; }
+.cw-temp-quente { background: #7f1d1d; color: #fecaca; }
+.cw-estagio {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.cw-secao { margin: 10px 0 4px; }
+.cw-secao-titulo {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #93c5fd;
+}
+.cw-secao-texto { margin: 0; color: #e5e7eb; }
+
+.cw-sugestao {
+  background: #0f1a2e;
+  border: 1px solid #1f2a3d;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.cw-sugestao-titulo {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+.cw-sugestao-msg {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.cw-sugestao-acoes {
+  display: flex;
+  gap: 6px;
+}
+.cw-botao-mini {
+  border: 1px solid #2b3a55;
+  background: transparent;
+  color: #dbeafe;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cw-botao-mini:hover { background: #16233a; }
+.cw-botao-mini-primario {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.cw-botao-mini-primario:hover { background: #1d4ed8; }
+
+.cw-objecao {
+  border-left: 3px solid #f59e0b;
+  padding: 4px 10px;
+  margin: 8px 0;
+}
+.cw-objecao-titulo {
+  margin: 0 0 3px;
+  font-weight: 700;
+  color: #fde68a;
+}
+.cw-objecao-resposta { margin: 0; }

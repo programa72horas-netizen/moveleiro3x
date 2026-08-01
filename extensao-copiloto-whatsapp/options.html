@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Copiloto de Vendas — Configurações</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+      line-height: 1.5;
+    }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .subtitulo { color: #6b7280; margin-top: 0; }
+    fieldset {
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin: 18px 0;
+    }
+    legend { font-weight: 700; padding: 0 6px; }
+    label { display: block; font-weight: 600; margin: 12px 0 4px; }
+    .ajuda { font-weight: 400; color: #6b7280; font-size: 13px; margin: 2px 0 6px; }
+    input[type="text"], input[type="password"], select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    textarea { min-height: 260px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+    .linha-radio { display: flex; gap: 18px; margin-top: 6px; }
+    .linha-radio label { display: flex; align-items: center; gap: 6px; font-weight: 500; margin: 0; }
+    button {
+      margin-top: 20px;
+      padding: 10px 22px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      background: #2563eb;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    #status { margin-left: 12px; font-weight: 600; color: #059669; }
+    .oculto { display: none; }
+  </style>
+</head>
+<body>
+  <h1>🧠 Copiloto de Vendas — WhatsApp</h1>
+  <p class="subtitulo">Configure a conexão com a IA e o conhecimento do seu negócio (playbook).</p>
+
+  <fieldset>
+    <legend>Conexão</legend>
+    <label>Modo de acesso</label>
+    <div class="linha-radio">
+      <label><input type="radio" name="modo" value="direto" checked /> Chave própria (testes/beta)</label>
+      <label><input type="radio" name="modo" value="backend" /> Assinatura (servidor licenciado)</label>
+    </div>
+
+    <div id="campos-direto">
+      <label for="apiKey">Chave da API da Anthropic</label>
+      <p class="ajuda">Crie em console.anthropic.com → API Keys. Fica salva somente neste navegador.</p>
+      <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+
+      <label for="modelo">Modelo</label>
+      <p class="ajuda">claude-opus-5 dá o melhor direcionamento. claude-haiku-4-5 é mais rápido e barato (bom para escalar a assinatura).</p>
+      <select id="modelo">
+        <option value="claude-opus-5">claude-opus-5 (recomendado)</option>
+        <option value="claude-sonnet-5">claude-sonnet-5</option>
+        <option value="claude-haiku-4-5">claude-haiku-4-5 (rápido/econômico)</option>
+      </select>
+    </div>
+
+    <div id="campos-backend" class="oculto">
+      <label for="backendUrl">Endereço do servidor</label>
+      <p class="ajuda">URL do seu Cloudflare Worker (veja backend/README no projeto). Ex.: https://copiloto.seudominio.workers.dev</p>
+      <input type="text" id="backendUrl" placeholder="https://..." />
+
+      <label for="licenseKey">Chave de licença</label>
+      <p class="ajuda">A chave que o assinante recebe ao pagar. O servidor valida e libera o uso.</p>
+      <input type="text" id="licenseKey" placeholder="LIC-..." autocomplete="off" />
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Seu negócio</legend>
+    <label for="nomeVendedor">Nome do vendedor (opcional)</label>
+    <input type="text" id="nomeVendedor" placeholder="Ex.: Ana" />
+
+    <label for="tom">Tom de voz das mensagens (opcional)</label>
+    <input type="text" id="tom" placeholder="Ex.: próximo e consultivo, sem gíria, chama o cliente pelo nome" />
+
+    <label for="playbook">Playbook de vendas</label>
+    <p class="ajuda">Esse é o "conhecimento que você passa" para a IA: produtos, preços, condições, diferenciais, objeções comuns e como responder. Quanto melhor o playbook, melhores as sugestões.</p>
+    <textarea id="playbook" spellcheck="false"></textarea>
+  </fieldset>
+
+  <button id="salvar" type="button">Salvar configurações</button>
+  <span id="status"></span>
+
+  <script src="options.js"></script>
+</body>
+</html>
