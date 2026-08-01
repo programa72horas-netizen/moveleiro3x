@@ -415,6 +415,19 @@ function restantesParaProc(cli, procId) {
     .reduce((s, p) => s + p.restantes, 0);
 }
 
+/** Procedimentos que aparecem para a cliente: só os cobertos pelos planos
+    dela; sem plano (ou saldo zerado), mostra todos para agendar avulso. */
+function procsDisponiveis(cli) {
+  const pools = poolsDoCliente(cli).filter((p) => p.restantes > 0);
+  if (!pools.length) return PROCEDIMENTOS;
+  const ids = new Set();
+  for (const p of pools) {
+    if (p.pool.procs === 'todos') return PROCEDIMENTOS;
+    p.pool.procs.forEach((x) => ids.add(x));
+  }
+  return PROCEDIMENTOS.filter((pr) => ids.has(pr.id));
+}
+
 function restantesTotais(cli) {
   return poolsDoCliente(cli).reduce((s, p) => s + p.restantes, 0);
 }
@@ -648,10 +661,10 @@ async function entrar() {
   abrirOnboarding(novo);
 }
 
-let onbEscolha; // pacoteId ou 'nenhum'
+let onbEscolhas = new Set(); // pacoteIds e/ou 'nenhum' (pode ter mais de um pacote)
 
 function abrirOnboarding(cli) {
-  onbEscolha = undefined;
+  onbEscolhas = new Set();
   $('#onb-ola').textContent = 'Que bom ter você aqui, ' + primeiroNome(cli.nome) + '!';
   const area = $('#onb-pacotes');
   area.innerHTML = '';
@@ -660,12 +673,17 @@ function abrirOnboarding(cli) {
   for (const op of opcoes) {
     const b = document.createElement('button');
     b.className = 'opcao-plano';
+    b.dataset.op = op.id;
     b.innerHTML = '<strong>' + esc(op.nome) + '</strong><small>' + esc(op.desc) + '</small>';
     b.addEventListener('click', () => {
-      onbEscolha = op.id;
-      $$('#onb-pacotes .opcao-plano').forEach((x) => x.classList.remove('sel'));
-      b.classList.add('sel');
-      $('#btn-onb-ok').disabled = false;
+      if (op.id === 'nenhum') {
+        onbEscolhas = onbEscolhas.has('nenhum') ? new Set() : new Set(['nenhum']);
+      } else {
+        onbEscolhas.delete('nenhum');
+        if (onbEscolhas.has(op.id)) onbEscolhas.delete(op.id); else onbEscolhas.add(op.id);
+      }
+      $$('#onb-pacotes .opcao-plano').forEach((x) => x.classList.toggle('sel', onbEscolhas.has(x.dataset.op)));
+      $('#btn-onb-ok').disabled = onbEscolhas.size === 0;
     });
     area.appendChild(b);
   }
@@ -675,14 +693,15 @@ function abrirOnboarding(cli) {
 
 function concluirOnboarding() {
   const cli = clienteLogado();
-  if (!cli || onbEscolha === undefined) return;
-  if (onbEscolha !== 'nenhum') {
-    cli.planos = cli.planos || [];
-    cli.planos.push(criarPlano(onbEscolha, 'cliente'));
-  }
+  if (!cli || !onbEscolhas.size) return;
+  const pacotes = Array.from(onbEscolhas).filter((id) => id !== 'nenhum');
+  cli.planos = cli.planos || [];
+  for (const id of pacotes) cli.planos.push(criarPlano(id, 'cliente'));
   cli.onboarded = true;
   salvarCliente(cli);
-  toast(onbEscolha !== 'nenhum' ? 'Plano registrado. Agora é só agendar.' : 'Perfil criado. Conheça nossos planos quando quiser.');
+  toast(pacotes.length
+    ? (pacotes.length > 1 ? 'Planos registrados. Agora é só agendar.' : 'Plano registrado. Agora é só agendar.')
+    : 'Perfil criado. Conheça nossos planos quando quiser.');
   abrirApp();
 }
 
@@ -807,10 +826,12 @@ const agSel = { procId: null, data: null, hora: null };
 let calMes = new Date(); // mês exibido no calendário
 
 function renderAgendar(cli) {
-  // chips de procedimentos
+  // chips: apenas os procedimentos dos planos da cliente
+  const disponiveis = procsDisponiveis(cli);
+  if (agSel.procId && !disponiveis.some((p) => p.id === agSel.procId)) agSel.procId = null;
   const area = $('#ag-procs');
   area.innerHTML = '';
-  for (const p of PROCEDIMENTOS) {
+  for (const p of disponiveis) {
     const b = document.createElement('button');
     b.className = 'chip' + (agSel.procId === p.id ? ' ativo' : '');
     b.textContent = p.nome;
@@ -828,6 +849,8 @@ function renderAgendar(cli) {
     cob.innerHTML = rest > 0
       ? 'Coberto pelo seu plano — <b>' + rest + '</b> ' + (rest === 1 ? 'sessão restante' : 'sessões restantes') + ' para este procedimento.'
       : 'Este procedimento será <b>avulso</b> — combine o valor com a recepção pelo WhatsApp.';
+  } else if (disponiveis.length < PROCEDIMENTOS.length) {
+    cob.innerHTML = 'Estes são os procedimentos do seu plano. Quer outro? Fale com a recepção.';
   } else {
     cob.textContent = '';
   }
@@ -1051,7 +1074,7 @@ function confirmarSerie() {
     'Para ser avisada <b>mesmo com o app fechado</b>, adicione ' +
     (n > 1 ? 'suas sessões' : 'sua sessão') + ' à agenda do celular — os alarmes tocam sozinhos.',
     [
-      { rotulo: 'Adicionar à agenda do celular', classe: 'btn', acao: () => baixarICS(criadas, cli) },
+      { rotulo: 'Adicionar à agenda do celular', classe: 'btn-zap', acao: () => baixarICS(criadas, cli) },
       { rotulo: 'Agora não', classe: 'btn-suave', acao: null },
     ]);
 }
@@ -1075,7 +1098,7 @@ function renderProximas(cli) {
   }
   let html = '';
   if (prox.length > 1) {
-    html += '<button class="btn-contorno mb-14" id="btn-ics-todas">Adicionar todas à agenda do celular</button>';
+    html += '<button class="btn-zap mb-14" id="btn-ics-todas">Adicionar todas à agenda do celular</button>';
   }
   html += prox.map((a) => {
     const d = deISO(a.data);
@@ -1606,10 +1629,14 @@ function abrirNovaCliente() {
     '<input class="campo" id="nc-nome" type="text" placeholder="Nome da cliente">' +
     '<label class="rotulo" for="nc-whats">WhatsApp</label>' +
     '<input class="campo" id="nc-whats" type="tel" placeholder="(48) 99999-9999">' +
-    '<label class="rotulo" for="nc-pacote">Plano (opcional)</label>' +
-    '<select class="campo" id="nc-pacote"><option value="">Sem plano por enquanto</option>' +
-      PACOTES.map((p) => '<option value="' + p.id + '">' + esc(p.nome) + ' — ' + moeda(p.preco) + '</option>').join('') +
-    '</select>' +
+    '<label class="rotulo">Planos (opcional — pode marcar mais de um)</label>' +
+    '<div id="nc-pacotes">' +
+      PACOTES.map((p) =>
+        '<label class="linha-flex" style="justify-content:space-between;padding:9px 2px;border-bottom:1px solid var(--linha);cursor:pointer">' +
+          '<span style="flex:1">' + esc(p.nome) + ' — ' + moeda(p.preco) + '</span>' +
+          '<input type="checkbox" value="' + p.id + '" style="width:20px;height:20px;accent-color:var(--ouro);flex:none">' +
+        '</label>').join('') +
+    '</div>' +
     '<button class="btn mt-20" id="btn-nc-salvar">Cadastrar</button>';
   ligarFechamento(corpo);
   $('#btn-nc-salvar').addEventListener('click', () => {
@@ -1618,12 +1645,13 @@ function abrirNovaCliente() {
     if (nome.length < 3) { toast('Digite o nome completo.'); return; }
     if (whats.length < 12) { toast('Digite o WhatsApp com DDD.'); return; }
     if (clientePorWhats(whats)) { toast('Já existe cliente com este WhatsApp.'); return; }
-    const pac = $('#nc-pacote').value;
+    const pacotes = Array.from(corpo.querySelectorAll('#nc-pacotes input:checked')).map((x) => x.value);
     // cadastro com número de cliente arquivada → reativa o perfil antigo
     const arquivada = DB.clientes.find((c) => c.whats === whats && c.removido);
     if (arquivada) {
       arquivada.removido = false;
-      if (pac) { arquivada.planos = arquivada.planos || []; arquivada.planos.push(criarPlano(pac, 'admin')); }
+      arquivada.planos = arquivada.planos || [];
+      for (const pac of pacotes) arquivada.planos.push(criarPlano(pac, 'admin'));
       salvarCliente(arquivada);
       fecharModal('modal-cliente');
       toast('Cliente reativada ✓ (o histórico dela foi mantido)');
@@ -1631,7 +1659,7 @@ function abrirNovaCliente() {
       return;
     }
     const nova = { id: uid(), nome, whats, criadoEm: agora(), planos: [], onboarded: true };
-    if (pac) nova.planos.push(criarPlano(pac, 'admin'));
+    for (const pac of pacotes) nova.planos.push(criarPlano(pac, 'admin'));
     salvarCliente(nova);
     fecharModal('modal-cliente');
     toast('Cliente cadastrada ✓');
@@ -1785,6 +1813,50 @@ function abrirFichaCliente(id) {
 }
 
 /* ------------------------------------------------------------
+   Logotipo 3D interativo (tela de entrada)
+   ------------------------------------------------------------ */
+function iniciarLogo3D() {
+  const cena = $('#logo3d');
+  const placa = $('#logo3d-placa');
+  if (!cena || !placa) return;
+
+  let ang = -22, tomb = 10, auto = true, retomar;
+  const reduzMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function aplicar() {
+    placa.style.transform = 'rotateX(' + (-tomb) + 'deg) rotateY(' + ang + 'deg)';
+  }
+  aplicar();
+
+  if (!reduzMovimento) {
+    (function passo() {
+      if (auto) { ang += 0.35; aplicar(); }
+      requestAnimationFrame(passo);
+    })();
+  }
+
+  let arrastando = false, x0 = 0, y0 = 0, ang0 = 0, tomb0 = 0;
+  cena.addEventListener('pointerdown', (e) => {
+    arrastando = true; auto = false; clearTimeout(retomar);
+    x0 = e.clientX; y0 = e.clientY; ang0 = ang; tomb0 = tomb;
+    cena.setPointerCapture(e.pointerId);
+  });
+  cena.addEventListener('pointermove', (e) => {
+    if (!arrastando) return;
+    ang = ang0 + (e.clientX - x0) * 0.55;
+    tomb = Math.max(-28, Math.min(28, tomb0 + (e.clientY - y0) * 0.25));
+    aplicar();
+  });
+  const soltar = () => {
+    if (!arrastando) return;
+    arrastando = false;
+    retomar = setTimeout(() => { auto = true; }, 2400);
+  };
+  cena.addEventListener('pointerup', soltar);
+  cena.addEventListener('pointercancel', soltar);
+}
+
+/* ------------------------------------------------------------
    Ligações de eventos
    ------------------------------------------------------------ */
 function ligarFechamento(raiz) {
@@ -1842,6 +1914,7 @@ function ligarEventos() {
 function iniciar() {
   carregarDB();
   ligarEventos();
+  iniciarLogo3D();
   renderPerfisConhecidos();
 
   // restaura a sessão do aparelho
