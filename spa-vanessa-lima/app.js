@@ -145,6 +145,8 @@ function linkZap(numero, msg) {
   return 'https://wa.me/' + numero + '?text=' + encodeURIComponent(msg);
 }
 
+const ICONE_ZAP = '<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.297-.497.1-.198.05-.371-.025-.52-.074-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>';
+
 async function sha256Hex(texto) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -316,7 +318,8 @@ function sanearRegistro(tipo, r) {
     id: String(r.id), nome: String(r.nome || '').slice(0, 120),
     whats: String(r.whats || '').replace(/\D/g, '').slice(0, 15),
     criadoEm: Number(r.criadoEm) || 0, planos,
-    onboarded: !!r.onboarded, removido: !!r.removido, up: Number(r.up) || 0,
+    onboarded: !!r.onboarded, removido: !!r.removido,
+    excluido: !!r.excluido, up: Number(r.up) || 0,
   };
 }
 
@@ -337,7 +340,7 @@ function mesclar(locais, remotos, tipo) {
     const i = locais.findIndex((l) => l.id === r.id);
     if (i < 0) { locais.push(r); mudou = true; continue; }
     const l = locais[i];
-    if (tipo === 'cliente') {
+    if (tipo === 'cliente' && !r.excluido && !l.excluido) {
       const base = (r.up || 0) > (l.up || 0) ? r : l;
       const outro = base === r ? l : r;
       const unido = Object.assign({}, base, {
@@ -347,6 +350,8 @@ function mesclar(locais, remotos, tipo) {
       if (JSON.stringify(unido) !== JSON.stringify(l)) { locais[i] = unido; mudou = true; }
       if (JSON.stringify(unido) !== JSON.stringify(r)) enfileirar('cliente', unido);
     } else if ((r.up || 0) > (l.up || 0)) {
+      // exclusão definitiva (ou agendamento): o registro mais novo vence,
+      // sem união de planos — senão a exclusão ressuscitaria as compras
       locais[i] = r; mudou = true;
     }
   }
@@ -1226,7 +1231,7 @@ function renderPlanos(cli) {
         doPlano.map((p) => barraPool(p, true)).join('') +
         '<a class="btn-zap mt-8" target="_blank" rel="noopener" href="' +
           esc(linkZap(CONFIG.WHATS_COMERCIAL, 'Olá! Sou ' + cli.nome + '. Gostaria de renovar meu plano *' + plano.nome + '*.')) +
-        '">Renovar pelo WhatsApp</a>' +
+        '">' + ICONE_ZAP + ' Renovar pelo WhatsApp</a>' +
       '</div>';
     }).join('');
   }
@@ -1240,7 +1245,7 @@ function renderPlanos(cli) {
       '<a class="btn-zap" target="_blank" rel="noopener" href="' +
         esc(linkZap(CONFIG.WHATS_COMERCIAL,
           'Olá! Vim pelo app do Spa Vanessa Lima. Tenho interesse no pacote *' + p.nome + '* (' + p.desc + ') — ' + moeda(p.preco) + '. Pode me ajudar?')) +
-      '">Comprar · Renovar</a>' +
+      '">' + ICONE_ZAP + ' Comprar · Renovar</a>' +
     '</div>'
   ).join('');
 
@@ -1748,7 +1753,10 @@ function abrirFichaCliente(id) {
       : '<p class="texto-suave">Nenhuma sessão registrada.</p>') +
 
     '<hr class="divisor">' +
-    '<button class="link-discreto" id="btn-ficha-arquivar" style="color:var(--alerta)">Arquivar cliente</button>';
+    '<div class="linha-flex" style="justify-content:space-between">' +
+      '<button class="link-discreto" id="btn-ficha-arquivar" style="flex:none">Arquivar cliente</button>' +
+      '<button class="link-discreto" id="btn-ficha-excluir" style="flex:none;color:var(--alerta)">Excluir e apagar dados</button>' +
+    '</div>';
 
   ligarFechamento(corpo);
 
@@ -1785,6 +1793,25 @@ function abrirFichaCliente(id) {
             promoverAvulsas(c); // sessões futuras avulsas passam a usar o plano novo
             toast('Pacote adicionado ✓');
             abrirFichaCliente(id);
+            renderAdmClientes();
+          } },
+        { rotulo: 'Voltar', classe: 'btn-suave', acao: null },
+      ]);
+  });
+
+  $('#btn-ficha-excluir').addEventListener('click', () => {
+    confirmar('Excluir cliente',
+      '<b>' + esc(c.nome) + '</b> será excluída definitivamente: cadastro, WhatsApp, planos, histórico e acesso serão apagados de todos os aparelhos na próxima sincronização. <b>Esta ação não tem volta.</b>',
+      [
+        { rotulo: 'Excluir definitivamente', classe: 'btn', acao: () => {
+            for (const a of agsDoCliente(c.id)) {
+              if (a.status !== 'cancelada') { a.status = 'cancelada'; salvarAgendamento(a); }
+            }
+            c.nome = ''; c.whats = ''; c.planos = [];
+            c.onboarded = false; c.removido = true; c.excluido = true;
+            salvarCliente(c);
+            fecharModal('modal-cliente');
+            toast('Cliente excluída — dados apagados.');
             renderAdmClientes();
           } },
         { rotulo: 'Voltar', classe: 'btn-suave', acao: null },
