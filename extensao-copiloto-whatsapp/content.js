@@ -69,16 +69,22 @@
     return saida;
   }
 
-  // "[14:32, 01/08/2026] Fulano: " → "14:32, 01/08/2026"
-  function carimboDaLinha(linha) {
-    const el = linha.querySelector(SELETORES.carimboTempo);
-    if (!el) return "";
-    const bruto = el.getAttribute("data-pre-plain-text") || "";
-    const m = bruto.match(/\[([^\]]+)\]/);
-    return m ? m[1].trim() : "";
+  // "[14:32, 01/08/2026] Fulano: " → { carimbo: "14:32, 01/08/2026", autor: "Fulano" }
+  function interpretarPrePlain(bruto) {
+    const m = (bruto || "").match(/\[([^\]]+)\]\s*([^:]*):?\s*$/);
+    return {
+      carimbo: m ? m[1].trim() : "",
+      autor: m && m[2] ? m[2].trim() : ""
+    };
   }
 
-  function extrairConversa() {
+  function carimboDaLinha(linha) {
+    const el = linha.querySelector(SELETORES.carimboTempo);
+    return el ? interpretarPrePlain(el.getAttribute("data-pre-plain-text")).carimbo : "";
+  }
+
+  // Estratégia 1: classes message-in/message-out (layout clássico).
+  function extrairPorClasses() {
     const linhas = Array.from(document.querySelectorAll(SELETORES.linhasMensagem));
     const mensagens = [];
 
@@ -107,6 +113,39 @@
       mensagens.push(carimbo ? `${autor} (${carimbo}): ${texto}` : `${autor}: ${texto}`);
     }
 
+    return mensagens;
+  }
+
+  // Estratégia 2 (reserva): blocos [data-pre-plain-text] — o atributo que o
+  // WhatsApp usa para copiar/colar traz "[hora, data] Autor: ". Sobrevive a
+  // trocas de classe do layout. Quem enviou é deduzido comparando o autor com
+  // o nome do contato no cabeçalho.
+  function extrairPorPrePlain() {
+    const raiz = document.querySelector(SELETORES.principal) || document;
+    const blocos = Array.from(raiz.querySelectorAll(SELETORES.carimboTempo));
+    const contato = nomeDoContato().toLowerCase();
+    const mensagens = [];
+
+    for (const bloco of blocos) {
+      const texto = textoComEmojis(bloco).trim();
+      if (!texto) continue;
+
+      const { carimbo, autor } = interpretarPrePlain(bloco.getAttribute("data-pre-plain-text"));
+      let rotulo;
+      if (autor && contato) {
+        rotulo = autor.toLowerCase() === contato ? "Cliente" : "Vendedor";
+      } else {
+        rotulo = autor || "Mensagem";
+      }
+      mensagens.push(carimbo ? `${rotulo} (${carimbo}): ${texto}` : `${rotulo}: ${texto}`);
+    }
+
+    return mensagens;
+  }
+
+  function extrairConversa() {
+    let mensagens = extrairPorClasses();
+    if (!mensagens.length) mensagens = extrairPorPrePlain();
     return mensagens.slice(-MAX_MENSAGENS).join("\n");
   }
 
