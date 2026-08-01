@@ -32,7 +32,7 @@ const CONFIG = {
   FALTA_CONSOME: false,
 
   // URL do Apps Script para sincronizar entre aparelhos (SINCRONIZACAO.md)
-  SYNC_URL: '',
+  SYNC_URL: 'https://script.google.com/macros/s/AKfycbwcyBTr4zLja-ftYz9aasK3rKEfq6hmO47Rvv8bBO1TtvmmQ61qhvvlQc2NUBjhRjKN/exec',
 };
 
 /* ------------------------------------------------------------
