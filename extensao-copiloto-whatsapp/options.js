@@ -48,7 +48,11 @@ async function carregar() {
   $("modelo").value = cfg.modelo || "claude-opus-5";
   $("nomeVendedor").value = cfg.nomeVendedor || "";
   $("tom").value = cfg.tom || "";
-  $("playbook").value = cfg.playbook !== undefined ? cfg.playbook : PLAYBOOK_EXEMPLO;
+  // O exemplo NUNCA entra como valor automaticamente: se fosse salvo sem
+  // edição, a IA trataria preços fictícios como verdade e os sugeriria a
+  // clientes reais. Fica como placeholder + botão explícito.
+  $("playbook").value = cfg.playbook || "";
+  $("playbook").placeholder = "Descreva produtos, preços, condições e objeções do SEU negócio — ou clique em \"Preencher com exemplo\" abaixo e edite.\n\n" + PLAYBOOK_EXEMPLO;
 
   atualizarVisibilidade();
 }
@@ -73,4 +77,10 @@ async function salvar() {
 
 document.querySelectorAll('input[name="modo"]').forEach((r) => r.addEventListener("change", atualizarVisibilidade));
 $("salvar").addEventListener("click", salvar);
+$("usarExemplo").addEventListener("click", () => {
+  if (!$("playbook").value.trim() || confirm("Substituir o playbook atual pelo exemplo de móveis planejados?")) {
+    $("playbook").value = PLAYBOOK_EXEMPLO;
+    $("playbook").focus();
+  }
+});
 carregar();

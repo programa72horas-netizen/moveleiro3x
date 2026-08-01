@@ -5,18 +5,27 @@
 // Dois modos de operação (configurados na página de opções):
 //  - "direto":  a chamada vai direto para api.anthropic.com com a chave do
 //               próprio usuário (bom para você testar e para os betas).
-//  - "backend": a chamada vai para o SEU servidor (Cloudflare Worker em
-//               backend/worker.js) com uma chave de licença. É assim que se
-//               vende em massa: o cliente nunca vê chave de API, e você
+//               O prompt é montado AQUI.
+//  - "backend": a extensão envia apenas os DADOS (ação, conversa, playbook)
+//               para o seu Cloudflare Worker (backend/worker.js), que valida
+//               a licença e monta o prompt LÁ. O cliente nunca vê chave de
+//               API, não consegue usar o servidor como proxy genérico, e você
 //               corta o acesso de quem cancela a assinatura.
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const VERSAO_API = "2023-06-01";
 const MODELO_PADRAO = "claude-opus-5";
-const MAX_TOKENS = 3000;
 
-// Estrutura garantida da resposta (structured outputs / json_schema).
-// Mantida simples de propósito: sem minItems/maxLength, que a API não aceita.
+// No claude-opus-5 o "thinking" fica ligado por padrão e consome parte do
+// max_tokens junto com a resposta. 8000 dá folga para pensar + JSON completo.
+const MAX_TOKENS = 8000;
+
+// O parâmetro output_config.effort não existe em todos os modelos
+// (claude-haiku-4-5 rejeita com 400). Só enviamos onde é suportado.
+const MODELOS_COM_EFFORT = new Set(["claude-opus-5", "claude-sonnet-5"]);
+
+// ⚠️ Mantenha ESQUEMA_RESULTADO, INSTRUCOES_BASE e INSTRUCOES_ACAO em
+// sincronia com backend/worker.js (os dois montam o mesmo prompt).
 const ESQUEMA_RESULTADO = {
   type: "object",
   additionalProperties: false,
@@ -88,10 +97,16 @@ const INSTRUCOES_ACAO = {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && msg.tipo === "ANALISAR") {
-    analisar(msg)
+    comBatimento(() => analisar(msg))
       .then(sendResponse)
       .catch((e) => sendResponse({ ok: false, erro: e && e.message ? e.message : "Erro inesperado." }));
     return true; // resposta assíncrona
+  }
+  if (msg && msg.tipo === "OBTER_SELETORES") {
+    obterSeletoresRemotos()
+      .then(sendResponse)
+      .catch(() => sendResponse(null));
+    return true;
   }
   if (msg && msg.tipo === "ABRIR_OPCOES") {
     chrome.runtime.openOptionsPage();
@@ -99,6 +114,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
+
+// A chamada à API pode demorar mais de 30s (o modelo "pensa" antes de
+// responder) e o Chrome encerra service workers MV3 que ficam 30s sem
+// atividade de API de extensão — mesmo com fetch em andamento. O batimento
+// chama uma API barata a cada 20s para manter o worker vivo até o fim.
+async function comBatimento(fn) {
+  const batimento = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000);
+  try {
+    return await fn();
+  } finally {
+    clearInterval(batimento);
+  }
+}
 
 async function analisar({ acao, contato, conversa }) {
   const cfg = await chrome.storage.local.get([
@@ -109,33 +137,41 @@ async function analisar({ acao, contato, conversa }) {
     return { ok: false, erro: "Não encontrei mensagens na conversa aberta. Abra uma conversa no WhatsApp Web e tente de novo." };
   }
 
-  const corpo = montarRequisicao({ acao, contato, conversa, cfg });
-
   const modo = cfg.modo || "direto";
   let resposta;
   if (modo === "backend") {
     if (!cfg.backendUrl || !cfg.licenseKey) {
       return { ok: false, erro: "Modo assinatura selecionado, mas o endereço do servidor ou a chave de licença não foram configurados. Abra as configurações da extensão." };
     }
-    resposta = await chamarBackend(cfg.backendUrl, cfg.licenseKey, corpo);
+    resposta = await chamarBackend(cfg, { acao, contato, conversa });
   } else {
     if (!cfg.apiKey) {
       return { ok: false, erro: "Configure sua chave da API da Anthropic nas opções da extensão (clique no ícone da extensão)." };
     }
+    const corpo = montarRequisicao({ acao, contato, conversa, cfg });
     resposta = await chamarAnthropic(cfg.apiKey, corpo);
   }
 
   return interpretarResposta(resposta);
 }
 
+// Impede que texto vindo da conversa "feche" a tag <conversa> e injete
+// instruções fora do bloco de dados.
+function sanitizarDelimitador(texto) {
+  return String(texto || "").replace(/<\/?conversa/gi, "<_conversa");
+}
+
 function montarRequisicao({ acao, contato, conversa, cfg }) {
   const playbook = (cfg.playbook || "").trim();
   const tom = (cfg.tom || "").trim();
   const nomeVendedor = (cfg.nomeVendedor || "").trim();
+  const modelo = cfg.modelo || MODELO_PADRAO;
 
   // O system fica estável entre chamadas (instruções + playbook), com
   // cache_control no último bloco: prompt caching reduz o custo por análise
-  // quando o vendedor usa a extensão várias vezes seguidas.
+  // quando o vendedor usa a extensão várias vezes seguidas. (Com playbook
+  // pequeno o prefixo pode ficar abaixo do mínimo cacheável do modelo — sem
+  // efeito colateral, apenas não cacheia.)
   const blocosSystem = [{ type: "text", text: INSTRUCOES_BASE }];
 
   let contexto = "";
@@ -149,22 +185,28 @@ function montarRequisicao({ acao, contato, conversa, cfg }) {
   blocosSystem.push({ type: "text", text: contexto, cache_control: { type: "ephemeral" } });
 
   const instrucaoAcao = INSTRUCOES_ACAO[acao] || INSTRUCOES_ACAO.analise;
+  const contatoLimpo = sanitizarDelimitador(contato || "cliente").replace(/"/g, "'");
 
-  return {
-    model: cfg.modelo || MODELO_PADRAO,
+  const corpo = {
+    model: modelo,
     max_tokens: MAX_TOKENS,
     system: blocosSystem,
     output_config: {
-      effort: "medium",
       format: { type: "json_schema", schema: ESQUEMA_RESULTADO }
     },
     messages: [
       {
         role: "user",
-        content: `${instrucaoAcao}\n\n<conversa contato="${(contato || "cliente").replace(/"/g, "'")}">\n${conversa}\n</conversa>`
+        content: `${instrucaoAcao}\n\n<conversa contato="${contatoLimpo}">\n${sanitizarDelimitador(conversa)}\n</conversa>`
       }
     ]
   };
+
+  if (MODELOS_COM_EFFORT.has(modelo)) {
+    corpo.output_config.effort = "medium";
+  }
+
+  return corpo;
 }
 
 async function chamarAnthropic(apiKey, corpo) {
@@ -186,18 +228,38 @@ async function chamarAnthropic(apiKey, corpo) {
   return lerRespostaHttp(r);
 }
 
-async function chamarBackend(backendUrl, licenseKey, corpo) {
+// No modo assinatura enviamos só os DADOS; o worker monta o prompt.
+async function chamarBackend(cfg, { acao, contato, conversa }) {
   let r;
   try {
-    r = await fetch(backendUrl.replace(/\/$/, "") + "/analisar", {
+    r = await fetch(cfg.backendUrl.replace(/\/$/, "") + "/analisar", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ licenca: licenseKey, requisicao: corpo })
+      body: JSON.stringify({
+        licenca: cfg.licenseKey,
+        instalacao: await obterIdInstalacao(),
+        acao,
+        contato: contato || "",
+        conversa,
+        playbook: cfg.playbook || "",
+        tom: cfg.tom || "",
+        nomeVendedor: cfg.nomeVendedor || ""
+      })
     });
   } catch (e) {
     throw new Error("Não consegui falar com o servidor de assinatura. Verifique o endereço configurado.");
   }
   return lerRespostaHttp(r);
+}
+
+// Identificador aleatório desta instalação — o worker usa para limitar
+// quantos navegadores usam a mesma licença (preço por vendedor).
+async function obterIdInstalacao() {
+  const { idInstalacao } = await chrome.storage.local.get("idInstalacao");
+  if (idInstalacao) return idInstalacao;
+  const novo = crypto.randomUUID();
+  await chrome.storage.local.set({ idInstalacao: novo });
+  return novo;
 }
 
 async function lerRespostaHttp(r) {
@@ -210,12 +272,12 @@ async function lerRespostaHttp(r) {
 
   if (r.ok) return dados;
 
-  const msgApi = dados && dados.error && dados.error.message ? dados.error.message : (dados && dados.erro) || "";
-  if (r.status === 401) throw new Error("Chave de API inválida ou revogada. Confira nas configurações.");
-  if (r.status === 403) throw new Error(msgApi || "Acesso negado (licença inválida, expirada ou sem permissão).");
-  if (r.status === 429) throw new Error("Limite de uso atingido. Aguarde alguns segundos e tente de novo.");
-  if (r.status >= 500) throw new Error("O serviço de IA está instável no momento. Tente de novo em instantes.");
-  throw new Error(msgApi || `Erro na chamada (HTTP ${r.status}).`);
+  const msgServico = (dados && dados.erro) || (dados && dados.error && dados.error.message) || "";
+  if (r.status === 401) throw new Error(msgServico || "Chave de API inválida ou revogada. Confira nas configurações.");
+  if (r.status === 403) throw new Error(msgServico || "Acesso negado (licença inválida, expirada ou sem permissão).");
+  if (r.status === 429) throw new Error(msgServico || "Limite de uso atingido. Aguarde alguns instantes e tente de novo.");
+  if (r.status >= 500) throw new Error(msgServico || "O serviço de IA está instável no momento. Tente de novo em instantes.");
+  throw new Error(msgServico || `Erro na chamada (HTTP ${r.status}).`);
 }
 
 function interpretarResposta(resposta) {
@@ -242,5 +304,37 @@ function interpretarResposta(resposta) {
     return { ok: false, erro: "Não consegui interpretar a resposta da IA. Tente de novo." };
   }
 
+  if (!dados || typeof dados !== "object") {
+    return { ok: false, erro: "A IA retornou dados em formato inesperado. Tente de novo." };
+  }
+
   return { ok: true, dados };
+}
+
+// ---------------------------------------------------------------------------
+// Seletores remotos: quando o WhatsApp muda o layout, você corrige os
+// seletores no KV do worker e todas as instalações se atualizam em minutos —
+// sem esperar a revisão da Chrome Web Store. Cache de 6 horas.
+// ---------------------------------------------------------------------------
+
+const CACHE_SELETORES_MS = 6 * 60 * 60 * 1000;
+
+async function obterSeletoresRemotos() {
+  const cfg = await chrome.storage.local.get(["backendUrl", "cacheSeletores"]);
+  if (!cfg.backendUrl) return null;
+
+  if (cfg.cacheSeletores && Date.now() - cfg.cacheSeletores.buscadoEm < CACHE_SELETORES_MS) {
+    return cfg.cacheSeletores.valor;
+  }
+
+  try {
+    const r = await fetch(cfg.backendUrl.replace(/\/$/, "") + "/config");
+    if (!r.ok) return (cfg.cacheSeletores && cfg.cacheSeletores.valor) || null;
+    const dados = await r.json();
+    const valor = (dados && dados.seletores) || null;
+    await chrome.storage.local.set({ cacheSeletores: { valor, buscadoEm: Date.now() } });
+    return valor;
+  } catch (e) {
+    return (cfg.cacheSeletores && cfg.cacheSeletores.valor) || null;
+  }
 }

@@ -4,7 +4,7 @@
 #cw-botao-flutuante {
   position: fixed;
   right: 18px;
-  bottom: 90px;
+  bottom: 140px; /* acima do botão "rolar para o fim" do próprio WhatsApp */
   z-index: 2147483646;
   width: 52px;
   height: 52px;
@@ -24,10 +24,11 @@
 #cw-painel {
   position: fixed;
   right: 18px;
-  bottom: 152px;
+  bottom: 202px;
   z-index: 2147483646;
   width: 360px;
-  max-height: min(72vh, 640px);
+  /* nunca empurra o cabeçalho (com o botão de fechar) para fora da tela */
+  max-height: min(calc(100vh - 230px), 640px);
   display: flex;
   flex-direction: column;
   background: #111827;

@@ -33,18 +33,25 @@ WhatsApp Web ──(content.js lê o DOM da conversa)──▶ background.js
                          ┌──────────────────────────────┴─────────────────────┐
                          ▼                                                    ▼
                  api.anthropic.com                              seu Cloudflare Worker
-                 (chave do usuário)                          (valida licença → repassa
-                                                              com a SUA chave de API)
+                 (prompt montado na extensão,               (a extensão envia só os DADOS;
+                  chave do usuário)                          o worker valida licença, limites
+                                                             e instalações, monta o prompt e
+                                                             chama a API com a SUA chave)
 ```
+
+No modo assinatura o prompt é montado **no servidor** de propósito: uma
+licença vazada não vira proxy genérico da sua chave de API — o worker só
+aceita os campos do produto (ação, conversa, playbook), com teto de tamanho
+em cada um.
 
 | Arquivo | Função |
 |---|---|
 | `manifest.json` | Manifest V3, permissões mínimas (`storage` + host da API) |
-| `content.js` | Extrai a conversa do DOM e injeta a sidebar. **Seletores concentrados no objeto `SELETORES` no topo** — quando o WhatsApp mudar o layout, ajusta-se ali. |
-| `background.js` | Monta a chamada para a Claude API (saída estruturada em JSON garantida via `output_config.format`) |
+| `content.js` | Extrai a conversa do DOM (com emojis e horários) e injeta a sidebar. **Seletores concentrados no objeto `SELETORES` no topo** — e, no modo assinatura, atualizáveis remotamente via `GET /config` do worker (chave `_seletores` no KV): quando o WhatsApp mudar o layout, você corrige em minutos sem esperar a revisão da Chrome Web Store. |
+| `background.js` | Monta a chamada para a Claude API (saída estruturada em JSON garantida via `output_config.format`); mantém o service worker vivo durante chamadas longas |
 | `sidebar.css` | Visual da sidebar (prefixo `cw-` para não colidir com o WhatsApp) |
 | `options.html/js` | Configurações: modo, chave, modelo, tom de voz e playbook |
-| `backend/worker.js` | Servidor de licenciamento (Cloudflare Worker) para vender por assinatura |
+| `backend/worker.js` | Servidor de licenciamento (Cloudflare Worker): valida licença, limita instalações/uso por licença, monta o prompt e chama a API |
 
 > A extensão não usa build/bundler de propósito — é JavaScript puro, igual ao
 > resto deste repositório. Por isso a chamada à API é feita com `fetch` direto
@@ -55,7 +62,16 @@ WhatsApp Web ──(content.js lê o DOM da conversa)──▶ background.js
 
 No modo **assinatura**, o cliente recebe apenas uma **chave de licença** — a sua
 chave da API fica no servidor, o modelo e os limites são travados lá, e quem
-cancela a assinatura perde o acesso na hora. Deploy em ~10 minutos:
+cancela a assinatura perde o acesso na hora. Proteções já incluídas no worker:
+
+- **Prompt montado no servidor** — a licença não serve como proxy genérico da API
+- **Limites por licença**: 40 análises/dia e 600/mês (configuráveis por licença no KV)
+- **Máximo de 2 navegadores por licença** (preço por vendedor tem enforcement)
+- **Teto de tamanho de input** (conversa/playbook) — protege o custo por chamada
+- **Fail closed**: sem o KV de uso configurado, o worker recusa tudo
+- **Seletores remotos** (`_seletores` no KV) — correção de layout sem republicar
+
+Deploy em ~10 minutos:
 
 ```bash
 cd backend
@@ -82,11 +98,22 @@ plataforma de pagamento (Stripe/Hotmart/Kiwify) — ver comentários no
   massa e não usa API não-oficial de conexão — ela lê a tela que o próprio
   vendedor está vendo. Ainda assim, não é um produto oficial do WhatsApp;
   seja transparente com o cliente sobre isso.
-- **Custo por análise** (ordem de grandeza, medir no beta): ~R$ 0,25–0,35 com
-  `claude-opus-5`; ~R$ 0,05 com `claude-haiku-4-5`. O worker já vem com limite
-  diário por licença (200 análises) como proteção de custo.
+- **Custo por análise** (ordem de grandeza — varia com o tamanho da conversa e
+  do playbook; **meça no beta** antes de precificar): ~R$ 0,25–0,35 com
+  `claude-opus-5`; ~R$ 0,05 com `claude-haiku-4-5`. Alavancas baratas de custo:
+  truncamento de conversa (já aplicado no worker), prompt caching do playbook
+  (já aplicado) e escolha do modelo. O worker limita uso por licença
+  (40/dia, 600/mês por padrão) e o limite de gasto da chave no console da
+  Anthropic é o freio final.
+- **Segurança (decisões de MVP, documentadas)**: no modo "chave própria" a
+  chave da API fica em `chrome.storage.local` (texto puro — aceitável porque
+  esse modo é só para você e betas); o worker responde com CORS aberto
+  (`*`) porque extensões não têm origin fixa — a autenticação real é a
+  licença, nunca o CORS.
 - **Manutenção**: o WhatsApp Web muda o HTML periodicamente. Quando a extração
-  falhar, ajuste os seletores no topo do `content.js`.
+  falhar, ajuste os seletores no topo do `content.js` — ou, com o worker no ar,
+  publique a correção na chave `_seletores` do KV (propaga em até 6h para
+  todas as instalações, sem revisão da Web Store).
 
 ## Publicar na Chrome Web Store (quando for escalar)
 

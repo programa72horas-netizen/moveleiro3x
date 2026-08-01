@@ -6,18 +6,34 @@
 #      wrangler kv namespace create USO
 #      → cole os IDs gerados nos blocos abaixo
 #   3. wrangler secret put ANTHROPIC_API_KEY   (cole sua chave sk-ant-...)
+#      ⚠️ No console.anthropic.com, defina um LIMITE DE GASTO mensal para
+#      essa chave — é o freio de emergência da sua fatura.
 #   4. wrangler deploy
 #
-# Criar uma licença de teste:
+# Criar uma licença de teste (SOMENTE teste — licenças reais devem ser geradas
+# com entropia criptográfica pelo webhook de pagamento; ver worker.js):
 #   wrangler kv key put --binding=LICENCAS "LIC-TESTE-123" \
 #     '{"ativa": true, "cliente": "Beta", "plano": "mensal"}'
+#
+# Campos opcionais da licença: "expira" (ISO), "limiteDiario" (padrão 40),
+# "limiteMensal" (padrão 600), "maxInstalacoes" (padrão 2 navegadores).
+#
+# Sobrescrever seletores do WhatsApp remotamente (quando o layout mudar):
+#   wrangler kv key put --binding=LICENCAS "_seletores" \
+#     '{"linhasMensagem": "#main .novo-seletor-in, #main .novo-seletor-out"}'
+# Todas as instalações em modo assinatura atualizam em até 6h (sem esperar
+# revisão da Chrome Web Store).
+#
+# Defesa extra recomendada: regra de Rate Limiting da Cloudflare em /analisar
+# (por IP) para dificultar enumeração de licenças.
 
 name = "copiloto-vendas-whatsapp"
 main = "worker.js"
 compatibility_date = "2026-07-01"
 
 # Modelo servido aos assinantes (trava de custo — o cliente não escolhe).
-# claude-opus-5 = melhor qualidade | claude-haiku-4-5 = melhor margem no plano de R$ 88.
+# claude-opus-5 = melhor qualidade | claude-haiku-4-5 = melhor margem no plano
+# de R$ 88 (o worker ajusta os parâmetros automaticamente por modelo).
 [vars]
 MODELO_PERMITIDO = "claude-opus-5"
 
@@ -25,6 +41,8 @@ MODELO_PERMITIDO = "claude-opus-5"
 binding = "LICENCAS"
 id = "COLE_O_ID_AQUI"
 
+# OBRIGATÓRIO: sem o binding USO o worker recusa todas as chamadas
+# (fail closed) — é ele que garante os limites de uso por licença.
 [[kv_namespaces]]
 binding = "USO"
 id = "COLE_O_ID_AQUI"

@@ -4,8 +4,9 @@
 // 2. Injeta a sidebar do copiloto e conversa com o background.js.
 //
 // ⚠️ O WhatsApp Web muda o layout com frequência. TODOS os seletores ficam
-// concentrados no objeto SELETORES abaixo — quando algo quebrar, é aqui que
-// se ajusta, em um lugar só.
+// concentrados no objeto SELETORES abaixo — e, no modo assinatura, podem ser
+// sobrescritos remotamente pelo worker (chave "_seletores" no KV), corrigindo
+// todas as instalações em minutos, sem esperar revisão da Chrome Web Store.
 
 (() => {
   "use strict";
@@ -14,8 +15,11 @@
     principal: "#main",
     nomeContato: "#main header span[title]",
     linhasMensagem: "#main .message-in, #main .message-out",
+    classeSaida: "message-out",
     textoMensagem: "span.selectable-text",
-    prePlain: "[data-pre-plain-text]",
+    carimboTempo: "[data-pre-plain-text]",
+    midiaAudio: "audio, [data-icon='audio-play'], [data-icon='ptt-status']",
+    midiaImagem: "img[src^='blob:']",
     caixaDeTexto: "#main footer div[contenteditable='true']"
   };
 
@@ -44,32 +48,63 @@
     return el ? (el.getAttribute("title") || el.textContent || "").trim() : "";
   }
 
+  // O WhatsApp renderiza emojis como <img class="emoji" alt="👍">. innerText
+  // descarta o alt — e um "👍" sozinho viraria mensagem vazia. Este helper
+  // percorre os nós e recupera o texto COM os emojis.
+  function textoComEmojis(el) {
+    let saida = "";
+    for (const no of el.childNodes) {
+      if (no.nodeType === Node.TEXT_NODE) {
+        saida += no.nodeValue;
+      } else if (no.nodeType === Node.ELEMENT_NODE) {
+        if (no.tagName === "IMG") {
+          saida += no.getAttribute("alt") || "";
+        } else if (no.tagName === "BR") {
+          saida += "\n";
+        } else {
+          saida += textoComEmojis(no);
+        }
+      }
+    }
+    return saida;
+  }
+
+  // "[14:32, 01/08/2026] Fulano: " → "14:32, 01/08/2026"
+  function carimboDaLinha(linha) {
+    const el = linha.querySelector(SELETORES.carimboTempo);
+    if (!el) return "";
+    const bruto = el.getAttribute("data-pre-plain-text") || "";
+    const m = bruto.match(/\[([^\]]+)\]/);
+    return m ? m[1].trim() : "";
+  }
+
   function extrairConversa() {
     const linhas = Array.from(document.querySelectorAll(SELETORES.linhasMensagem));
     const mensagens = [];
 
     for (const linha of linhas) {
-      const autor = linha.classList.contains("message-out") ? "Vendedor" : "Cliente";
-      let texto = "";
+      const autor = linha.classList.contains(SELETORES.classeSaida) ? "Vendedor" : "Cliente";
 
+      let texto = "";
       const spans = linha.querySelectorAll(SELETORES.textoMensagem);
       if (spans.length) {
-        texto = Array.from(spans).map((s) => s.innerText).join("\n").trim();
+        texto = Array.from(spans).map((s) => textoComEmojis(s)).join("\n").trim();
       }
 
       if (!texto) {
         // Mensagem sem texto (áudio, imagem, figurinha...): registra que existiu,
         // porque "cliente mandou áudio e ninguém respondeu" é sinal de venda.
-        if (linha.querySelector("audio, [data-icon='audio-play'], [data-icon='ptt-status']")) {
+        if (linha.querySelector(SELETORES.midiaAudio)) {
           texto = "[áudio]";
-        } else if (linha.querySelector("img[src^='blob:'], img[src^='data:']")) {
+        } else if (linha.querySelector(SELETORES.midiaImagem)) {
           texto = "[imagem]";
         } else {
           continue;
         }
       }
 
-      mensagens.push(`${autor}: ${texto}`);
+      const carimbo = carimboDaLinha(linha);
+      mensagens.push(carimbo ? `${autor} (${carimbo}): ${texto}` : `${autor}: ${texto}`);
     }
 
     return mensagens.slice(-MAX_MENSAGENS).join("\n");
@@ -111,7 +146,11 @@
     botaoConfig.className = "cw-botao-icone";
     botaoConfig.title = "Configurações";
     botaoConfig.textContent = "⚙️";
-    botaoConfig.addEventListener("click", () => chrome.runtime.sendMessage({ tipo: "ABRIR_OPCOES" }));
+    botaoConfig.addEventListener("click", () => {
+      try {
+        chrome.runtime.sendMessage({ tipo: "ABRIR_OPCOES" }).catch(() => {});
+      } catch (e) { /* extensão recarregada */ }
+    });
     cabecalho.appendChild(botaoConfig);
 
     const botaoFechar = document.createElement("button");
@@ -178,6 +217,12 @@
     const conversa = extrairConversa();
     const contato = nomeDoContato();
 
+    if (!conversa && document.querySelector(SELETORES.principal)) {
+      ocupado = false;
+      mostrarErro("Não consegui ler as mensagens desta conversa. Se ela não estiver vazia, o WhatsApp pode ter atualizado o layout — já estamos ajustando; tente novamente mais tarde.");
+      return;
+    }
+
     let resposta;
     try {
       resposta = await chrome.runtime.sendMessage({ tipo: "ANALISAR", acao, contato, conversa });
@@ -204,9 +249,16 @@
 
   // ---------------------------------------------------------------------------
   // Renderização do resultado
+  // (sempre via textContent — nunca innerHTML — para que nenhum conteúdo vindo
+  // do modelo ou da conversa vire HTML executável. Manter assim.)
   // ---------------------------------------------------------------------------
 
   function renderizarResultado(dados) {
+    if (!dados || typeof dados !== "object") {
+      mostrarErro("A análise voltou em formato inesperado. Tente de novo.");
+      return;
+    }
+
     limpar(areaResultado);
 
     const topo = document.createElement("div");
@@ -221,13 +273,13 @@
     if (dados.estagio) {
       const estagio = document.createElement("span");
       estagio.className = "cw-estagio";
-      estagio.textContent = dados.estagio;
+      estagio.textContent = String(dados.estagio);
       topo.appendChild(estagio);
     }
     areaResultado.appendChild(topo);
 
     if (dados.resumo) {
-      areaResultado.appendChild(secaoTexto("Resumo", dados.resumo));
+      areaResultado.appendChild(secaoTexto("Resumo", String(dados.resumo)));
     }
 
     if (Array.isArray(dados.sugestoes) && dados.sugestoes.length) {
@@ -236,7 +288,7 @@
       t.textContent = "Mensagens sugeridas";
       areaResultado.appendChild(t);
       for (const s of dados.sugestoes) {
-        areaResultado.appendChild(cartaoSugestao(s));
+        if (s && typeof s.mensagem === "string") areaResultado.appendChild(cartaoSugestao(s));
       }
     }
 
@@ -246,14 +298,15 @@
       t.textContent = "Objeções no radar";
       areaResultado.appendChild(t);
       for (const o of dados.objecoes) {
+        if (!o || typeof o !== "object") continue;
         const bloco = document.createElement("div");
         bloco.className = "cw-objecao";
         const q = document.createElement("p");
         q.className = "cw-objecao-titulo";
-        q.textContent = o.objecao;
+        q.textContent = String(o.objecao || "");
         const r = document.createElement("p");
         r.className = "cw-objecao-resposta";
-        r.textContent = o.como_responder;
+        r.textContent = String(o.como_responder || "");
         bloco.appendChild(q);
         bloco.appendChild(r);
         areaResultado.appendChild(bloco);
@@ -261,7 +314,7 @@
     }
 
     if (dados.proximo_passo) {
-      areaResultado.appendChild(secaoTexto("👉 Próximo passo", dados.proximo_passo));
+      areaResultado.appendChild(secaoTexto("👉 Próximo passo", String(dados.proximo_passo)));
     }
   }
 
@@ -325,19 +378,26 @@
   }
 
   function feedbackBotao(botao, texto) {
-    const original = botao.textContent;
+    if (!botao.dataset.rotuloOriginal) {
+      botao.dataset.rotuloOriginal = botao.textContent;
+    }
     botao.textContent = texto;
-    setTimeout(() => { botao.textContent = original; }, 1500);
+    clearTimeout(Number(botao.dataset.timerFeedback || 0));
+    botao.dataset.timerFeedback = String(setTimeout(() => {
+      botao.textContent = botao.dataset.rotuloOriginal;
+    }, 1500));
   }
 
-  // Melhor esforço: insere o texto na caixa de mensagem do WhatsApp para o
-  // vendedor revisar e enviar ele mesmo. Se o editor mudar e quebrar, o botão
-  // "Copiar" continua funcionando sempre.
+  // Melhor esforço: SUBSTITUI o conteúdo da caixa de mensagem pelo texto
+  // sugerido (seleciona tudo antes de inserir — sem isso, a sugestão seria
+  // emendada em rascunhos já digitados). O vendedor sempre revisa e envia
+  // ele mesmo. Se o editor mudar e quebrar, o botão "Copiar" segue funcionando.
   function inserirNaCaixa(texto) {
     const caixa = document.querySelector(SELETORES.caixaDeTexto);
     if (!caixa) return false;
     try {
       caixa.focus();
+      document.execCommand("selectAll", false, null);
       const ok = document.execCommand("insertText", false, texto);
       return ok !== false;
     } catch (e) {
@@ -347,12 +407,30 @@
 
   // ---------------------------------------------------------------------------
   // Inicialização — o WhatsApp Web é um SPA que demora a montar o DOM.
+  // Também busca (via background) sobrescritas remotas de seletores.
   // ---------------------------------------------------------------------------
+
+  function aplicarSeletoresRemotos() {
+    try {
+      chrome.runtime.sendMessage({ tipo: "OBTER_SELETORES" })
+        .then((remotos) => {
+          if (remotos && typeof remotos === "object") {
+            for (const chave of Object.keys(SELETORES)) {
+              if (typeof remotos[chave] === "string" && remotos[chave]) {
+                SELETORES[chave] = remotos[chave];
+              }
+            }
+          }
+        })
+        .catch(() => {});
+    } catch (e) { /* extensão recarregada */ }
+  }
 
   const iniciar = setInterval(() => {
     if (document.body) {
-      garantirUi();
       clearInterval(iniciar);
+      garantirUi();
+      aplicarSeletoresRemotos();
     }
   }, 1000);
 })();
