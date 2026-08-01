@@ -3,6 +3,11 @@
   "name": "Copiloto de Vendas — WhatsApp",
   "version": "0.1.0",
   "description": "IA que analisa a conversa aberta no WhatsApp Web e sugere a próxima resposta com base no seu playbook de vendas.",
+  "icons": {
+    "16": "icones/icone-16.png",
+    "48": "icones/icone-48.png",
+    "128": "icones/icone-128.png"
+  },
   "permissions": ["storage"],
   "host_permissions": ["https://api.anthropic.com/*"],
   "background": {
@@ -18,6 +23,11 @@
   ],
   "options_page": "options.html",
   "action": {
-    "default_title": "Copiloto de Vendas — abrir configurações"
+    "default_title": "Copiloto de Vendas — abrir configurações",
+    "default_icon": {
+      "16": "icones/icone-16.png",
+      "48": "icones/icone-48.png",
+      "128": "icones/icone-128.png"
+    }
   }
 }
