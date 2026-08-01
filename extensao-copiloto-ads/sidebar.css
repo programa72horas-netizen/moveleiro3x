@@ -1,24 +1,49 @@
-/* Sidebar do Copiloto de Vendas dentro do WhatsApp Web.
+/* Sidebar do Copiloto de Tráfego ARS dentro do Gerenciador de Anúncios.
+   Identidade: Academia das Redes Sociais — magenta #9d095e, amarelo #fdd90d,
+   branco, tipografia Poppins (embutida na extensão).
    Prefixo cw- em tudo para não colidir com as classes do WhatsApp. */
+
+@font-face {
+  font-family: "Poppins ARS";
+  src: url("chrome-extension://__MSG_@@extension_id__/fontes/Poppins-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Poppins ARS";
+  src: url("chrome-extension://__MSG_@@extension_id__/fontes/Poppins-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Poppins ARS";
+  src: url("chrome-extension://__MSG_@@extension_id__/fontes/Poppins-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
 
 #cw-botao-flutuante {
   position: fixed;
   right: 18px;
   bottom: 140px; /* acima do botão "rolar para o fim" do próprio WhatsApp */
   z-index: 2147483646;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
+  width: 54px;
+  height: 54px;
+  padding: 0;
   border: none;
-  background: #1f2937;
-  color: #fff;
-  font-size: 24px;
+  background: transparent;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  filter: drop-shadow(0 5px 14px rgba(157, 9, 94, 0.45));
   transition: transform 0.15s ease;
 }
 #cw-botao-flutuante:hover {
   transform: scale(1.08);
+}
+.cw-logo-botao {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 14px;
 }
 
 #cw-painel {
@@ -26,18 +51,18 @@
   right: 18px;
   bottom: 202px;
   z-index: 2147483646;
-  width: 360px;
+  width: 372px;
   /* nunca empurra o cabeçalho (com o botão de fechar) para fora da tela */
-  max-height: min(calc(100vh - 230px), 640px);
+  max-height: min(calc(100vh - 230px), 660px);
   display: flex;
   flex-direction: column;
-  background: #111827;
-  color: #e5e7eb;
-  border-radius: 14px;
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #ffffff;
+  color: #2a1220;
+  border-radius: 16px;
+  box-shadow: 0 14px 44px rgba(42, 18, 32, 0.35);
+  font-family: "Poppins ARS", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow: hidden;
 }
 #cw-painel.cw-oculto {
@@ -47,65 +72,83 @@
 .cw-cabecalho {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 12px 14px;
-  background: #0b1220;
-  border-bottom: 1px solid #1f2a3d;
+  gap: 9px;
+  padding: 13px 14px;
+  background: #9d095e;
+}
+.cw-logo-titulo {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex: none;
 }
 .cw-titulo {
   flex: 1;
   font-weight: 700;
-  font-size: 14px;
-  color: #fff;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffffff;
 }
 .cw-botao-icone {
   border: none;
   background: transparent;
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 6px;
+  line-height: 1;
 }
 .cw-botao-icone:hover {
-  background: #1f2a3d;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
 }
 
 .cw-acoes {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #1f2a3d;
+  gap: 7px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border-bottom: 1px solid #f0e2ea;
 }
 .cw-botao-acao {
-  border: 1px solid #2b3a55;
-  background: #16233a;
-  color: #dbeafe;
+  border: 1.5px solid #ecd2e0;
+  background: #faf2f7;
+  color: #9d095e;
   border-radius: 999px;
-  padding: 6px 11px;
+  padding: 7px 13px;
+  font-family: inherit;
   font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 .cw-botao-acao:hover {
-  background: #1e3a5f;
+  background: #9d095e;
+  border-color: #9d095e;
+  color: #ffffff;
 }
 
 .cw-resultado {
-  padding: 12px 14px 16px;
+  padding: 12px 16px 18px;
   overflow-y: auto;
 }
 
 .cw-dica,
 .cw-carregando {
-  color: #9ca3af;
+  color: #8a6c7c;
   margin: 6px 0;
+}
+.cw-carregando {
+  color: #9d095e;
+  font-weight: 600;
 }
 .cw-carregando::after {
   content: "";
   display: inline-block;
-  width: 10px;
+  width: 12px;
   animation: cw-pontos 1.2s steps(4) infinite;
 }
 @keyframes cw-pontos {
@@ -116,10 +159,10 @@
 }
 
 .cw-erro {
-  color: #fca5a5;
-  background: #3b1219;
-  border: 1px solid #7f1d1d;
-  border-radius: 8px;
+  color: #9f1239;
+  background: #fdeef2;
+  border: 1px solid #f5c2d0;
+  border-radius: 10px;
   padding: 10px 12px;
   margin: 6px 0;
 }
@@ -129,36 +172,49 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin: 4px 0 10px;
 }
 .cw-selo {
   font-weight: 700;
-  font-size: 12px;
-  padding: 3px 10px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 12px;
   border-radius: 999px;
 }
-.cw-temp-frio { background: #0c4a6e; color: #bae6fd; }
-.cw-temp-morno { background: #78350f; color: #fde68a; }
-.cw-temp-quente { background: #7f1d1d; color: #fecaca; }
+.cw-saude-bem { background: #dcfce7; color: #166534; }
+.cw-saude-atencao { background: #fdd90d; color: #3d3103; }
+.cw-saude-critico { background: #9d095e; color: #ffffff; }
 .cw-estagio {
-  color: #9ca3af;
+  color: #8a6c7c;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .cw-secao { margin: 10px 0 4px; }
 .cw-secao-titulo {
-  margin: 12px 0 6px;
-  font-size: 12px;
+  margin: 14px 0 6px;
+  font-size: 11.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #93c5fd;
+  letter-spacing: 0.07em;
+  color: #9d095e;
 }
-.cw-secao-texto { margin: 0; color: #e5e7eb; }
+.cw-secao-texto { margin: 0; color: #2a1220; }
+
+/* Destaque amarelo ARS para o próximo passo (último .cw-secao do resultado) */
+.cw-secao:last-child .cw-secao-texto {
+  background: #fdd90d;
+  color: #3d3103;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
 
 .cw-sugestao {
-  background: #0f1a2e;
-  border: 1px solid #1f2a3d;
+  background: #faf7f9;
+  border: 1px solid #f0e2ea;
+  border-left: 4px solid #9d095e;
   border-radius: 10px;
   padding: 10px 12px;
   margin: 8px 0;
@@ -167,51 +223,46 @@
   margin: 0 0 4px;
   font-size: 12px;
   font-weight: 700;
-  color: #93c5fd;
+  color: #9d095e;
 }
 .cw-sugestao-msg {
-  margin: 0 0 8px;
+  margin: 0 0 9px;
   white-space: pre-wrap;
+  color: #2a1220;
 }
 .cw-sugestao-acoes {
   display: flex;
-  gap: 6px;
+  gap: 7px;
 }
 .cw-botao-mini {
-  border: 1px solid #2b3a55;
+  border: 1.5px solid #9d095e;
   background: transparent;
-  color: #dbeafe;
-  border-radius: 6px;
-  padding: 4px 10px;
+  color: #9d095e;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-family: inherit;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
-.cw-botao-mini:hover { background: #16233a; }
+.cw-botao-mini:hover { background: #faf2f7; }
 .cw-botao-mini-primario {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
+  background: #9d095e;
+  border-color: #9d095e;
+  color: #ffffff;
 }
-.cw-botao-mini-primario:hover { background: #1d4ed8; }
+.cw-botao-mini-primario:hover { background: #7c0749; border-color: #7c0749; }
 
 .cw-objecao {
-  border-left: 3px solid #f59e0b;
-  padding: 4px 10px;
+  border-left: 4px solid #fdd90d;
+  background: #fffbea;
+  border-radius: 0 10px 10px 0;
+  padding: 8px 12px;
   margin: 8px 0;
 }
 .cw-objecao-titulo {
   margin: 0 0 3px;
   font-weight: 700;
-  color: #fde68a;
+  color: #6b5407;
 }
-.cw-objecao-resposta { margin: 0; }
-
-/* --- Copiloto de Tráfego: selo de saúde da conta + acento roxo --- */
-.cw-saude-bem { background: #14532d; color: #bbf7d0; }
-.cw-saude-atencao { background: #78350f; color: #fde68a; }
-.cw-saude-critico { background: #7f1d1d; color: #fecaca; }
-
-#cw-botao-flutuante { background: #4c1d95; }
-.cw-botao-mini-primario { background: #7c3aed; border-color: #7c3aed; }
-.cw-botao-mini-primario:hover { background: #6d28d9; }
-.cw-secao-titulo, .cw-sugestao-titulo { color: #c4b5fd; }
+.cw-objecao-resposta { margin: 0; color: #2a1220; }

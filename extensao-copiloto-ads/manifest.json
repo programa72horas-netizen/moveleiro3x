@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "Copiloto de Tráfego — Gerenciador de Anúncios",
-  "version": "0.1.0",
-  "description": "IA que lê as métricas visíveis no Gerenciador de Anúncios do Meta e devolve diagnóstico, otimizações e ideias de novas campanhas com base nas suas metas (CPL, CPA, ROAS).",
+  "name": "Copiloto de Tráfego ARS — Gerenciador de Anúncios",
+  "version": "0.2.0",
+  "description": "O copiloto de tráfego da Academia das Redes Sociais: IA que lê as métricas do Gerenciador de Anúncios e devolve diagnóstico, otimizações e novas campanhas com base nas suas metas.",
   "icons": {
     "16": "icones/icone-16.png",
     "48": "icones/icone-48.png",
     "128": "icones/icone-128.png"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["https://api.anthropic.com/*"],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.anthropic.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -20,8 +24,12 @@
         "https://business.facebook.com/adsmanager/*",
         "https://business.facebook.com/latest/ad_center/*"
       ],
-      "js": ["content.js"],
-      "css": ["sidebar.css"],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "sidebar.css"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -33,5 +41,17 @@
       "48": "icones/icone-48.png",
       "128": "icones/icone-128.png"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icones/*",
+        "fontes/*"
+      ],
+      "matches": [
+        "https://adsmanager.facebook.com/*",
+        "https://business.facebook.com/*"
+      ]
+    }
+  ]
 }
