@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Copiloto de Tráfego — Gerenciador de Anúncios",
+  "version": "0.1.0",
+  "description": "IA que lê as métricas visíveis no Gerenciador de Anúncios do Meta e devolve diagnóstico, otimizações e ideias de novas campanhas com base nas suas metas (CPL, CPA, ROAS).",
+  "icons": {
+    "16": "icones/icone-16.png",
+    "48": "icones/icone-48.png",
+    "128": "icones/icone-128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://adsmanager.facebook.com/*",
+        "https://business.facebook.com/adsmanager/*",
+        "https://business.facebook.com/latest/ad_center/*"
+      ],
+      "js": ["content.js"],
+      "css": ["sidebar.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Copiloto de Tráfego — abrir configurações",
+    "default_icon": {
+      "16": "icones/icone-16.png",
+      "48": "icones/icone-48.png",
+      "128": "icones/icone-128.png"
+    }
+  }
+}
