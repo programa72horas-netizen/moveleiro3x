@@ -30,7 +30,7 @@
     { id: "resposta", rotulo: "💬 Sugerir resposta" },
     { id: "objecao", rotulo: "🛡️ Quebrar objeção" },
     { id: "fechamento", rotulo: "🤝 Puxar fechamento" },
-    { id: "retomada", rotulo: "⏰ Retomar sumido" }
+    { id: "retomada", rotulo: "🔥 Cadência infernal" }
   ];
 
   const ROTULO_TEMPERATURA = {
@@ -163,8 +163,12 @@
     const botao = document.createElement("button");
     botao.id = "cw-botao-flutuante";
     botao.type = "button";
-    botao.title = "Copiloto de Vendas";
-    botao.textContent = "🧠";
+    botao.title = "Copiloto de Vendas ARS";
+    const logoBotao = document.createElement("img");
+    logoBotao.className = "cw-logo-botao";
+    logoBotao.alt = "ARS";
+    logoBotao.src = chrome.runtime.getURL("icones/icone-128.png");
+    botao.appendChild(logoBotao);
     botao.addEventListener("click", alternarPainel);
     document.body.appendChild(botao);
 
@@ -175,9 +179,15 @@
     const cabecalho = document.createElement("div");
     cabecalho.className = "cw-cabecalho";
 
+    const logoTitulo = document.createElement("img");
+    logoTitulo.className = "cw-logo-titulo";
+    logoTitulo.alt = "";
+    logoTitulo.src = chrome.runtime.getURL("icones/icone-48.png");
+    cabecalho.appendChild(logoTitulo);
+
     const titulo = document.createElement("span");
     titulo.className = "cw-titulo";
-    titulo.textContent = "Copiloto de Vendas";
+    titulo.textContent = "Copiloto de Vendas ARS";
     cabecalho.appendChild(titulo);
 
     const botaoConfig = document.createElement("button");

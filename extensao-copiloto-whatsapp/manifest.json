@@ -1,23 +1,33 @@
 {
   "manifest_version": 3,
-  "name": "Copiloto de Vendas — WhatsApp",
-  "version": "0.1.1",
-  "description": "IA que analisa a conversa aberta no WhatsApp Web e sugere a próxima resposta com base no seu playbook de vendas.",
+  "name": "Copiloto de Vendas ARS — WhatsApp",
+  "version": "0.2.0",
+  "description": "O copiloto de vendas da Academia das Redes Sociais: IA que analisa a conversa aberta no WhatsApp Web e sugere a próxima resposta com base no seu playbook.",
   "icons": {
     "16": "icones/icone-16.png",
     "48": "icones/icone-48.png",
     "128": "icones/icone-128.png"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["https://api.anthropic.com/*"],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.anthropic.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["content.js"],
-      "css": ["sidebar.css"],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "sidebar.css"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -29,5 +39,16 @@
       "48": "icones/icone-48.png",
       "128": "icones/icone-128.png"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icones/*",
+        "fontes/*"
+      ],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ]
+    }
+  ]
 }

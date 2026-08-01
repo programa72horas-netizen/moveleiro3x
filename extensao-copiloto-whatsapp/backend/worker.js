@@ -177,7 +177,7 @@ Regras:
       resposta: "O vendedor precisa responder a última mensagem do cliente AGORA. Concentre as sugestões em variações de resposta imediata para essa última mensagem (abordagens diferentes entre si).",
       objecao: "O cliente levantou (ou está prestes a levantar) uma objeção. Identifique a objeção real por trás do que ele disse e concentre as sugestões em mensagens que quebram essa objeção sem pressionar.",
       fechamento: "A conversa está madura (ou o vendedor quer testar). Concentre as sugestões em mensagens de fechamento: chamada clara para o próximo passo concreto (orçamento, visita, medição, pagamento), sem parecer desesperado.",
-      retomada: "O cliente parou de responder. Concentre as sugestões em mensagens de retomada (follow-up) que reabrem a conversa agregando valor, sem cobrar resposta nem soar carente."
+      retomada: "O cliente parou de responder. Monte uma CADÊNCIA DE FOLLOW-UP: exatamente 3 mensagens escalonadas para reabrir a conversa, cada uma com abordagem DIFERENTE (ex.: valor novo, prova social, custo de esperar), sempre agregando algo — nunca cobrando resposta nem soando carente. Use o campo titulo de cada sugestão para indicar o momento do envio (ex.: 'Passo 1 — enviar agora', 'Passo 2 — daqui a 2 dias', 'Passo 3 — daqui a 5 dias'), na ordem."
     },
     contexto({ playbook, tom, nomeVendedor }) {
       let contexto = "";
