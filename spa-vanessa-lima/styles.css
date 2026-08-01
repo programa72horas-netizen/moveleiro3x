@@ -136,13 +136,6 @@ a { color: var(--ouro-2); }
   color: #877d6c; margin-right: -.3em;
 }
 .l3d-sub::before, .l3d-sub::after { content: ""; width: 22px; height: 1px; background: #9a8f7c; }
-.l3d-dica {
-  text-align: center;
-  font-size: .62rem; letter-spacing: .22em; text-transform: uppercase;
-  color: #a89d8a;
-  margin: 26px 0 4px;
-}
-
 /* ---------- fotografia ---------- */
 
 .foto-hero { margin: 22px 0 18px; }

@@ -1,8 +1,8 @@
 /* Service worker — deixa o app abrir mesmo sem internet */
-const CACHE = 'vl-spa-v2';
+const CACHE = 'vl-spa-v3';
 const ARQUIVOS = [
   './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
-  './img/sala.jpg', './img/bambu.jpg', './img/recepcao.jpg',
+  './img/bambu.jpg', './img/recepcao.jpg',
 ];
 
 self.addEventListener('install', (e) => {
