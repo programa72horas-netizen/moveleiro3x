@@ -1,0 +1,10 @@
+// Configuração para hospedar o app do spa na Cloudflare (Workers/Pages)
+// Serve a pasta estática spa-vanessa-lima — sem build, sem servidor.
+{
+  "name": "spavanessalima",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./spa-vanessa-lima",
+    "not_found_handling": "single-page-application"
+  }
+}
