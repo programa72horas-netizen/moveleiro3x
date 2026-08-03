@@ -11,7 +11,7 @@
    ------------------------------------------------------------ */
 const CONFIG = {
   // WhatsApp comercial do spa, com DDI + DDD (só números)
-  WHATS_COMERCIAL: '555492285445',
+  WHATS_COMERCIAL: '555491431746',
 
   // Impressão digital (SHA-256) do código de acesso da equipe — o código em
   // si NÃO fica no fonte. Para trocar: abra o console do navegador no app e
