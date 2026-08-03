@@ -63,7 +63,7 @@ Tudo fica no início do arquivo [`app.js`](app.js):
 
 ```js
 const CONFIG = {
-  WHATS_COMERCIAL: '555492285445',  // WhatsApp comercial do spa (DDI+DDD+número)
+  WHATS_COMERCIAL: '555491431746',  // WhatsApp comercial do spa (DDI+DDD+número)
   PIN_EQUIPE_HASH: '…',             // impressão digital (SHA-256) do código da
                                     // recepção — o código em si não fica no fonte;
                                     // para trocar, veja SEGURANCA.md
