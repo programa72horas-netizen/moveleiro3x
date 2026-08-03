@@ -1,5 +1,6 @@
 // Configuração para hospedar o app do spa na Cloudflare (Workers/Pages)
 // Serve a pasta estática spa-vanessa-lima — sem build, sem servidor.
+// (commit dispara a build automática na Cloudflare)
 {
   "name": "spavanessalima",
   "compatibility_date": "2025-01-01",
