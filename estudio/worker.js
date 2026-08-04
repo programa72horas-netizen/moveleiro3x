@@ -110,6 +110,18 @@ function schemaDasVariacoes(slots) {
   };
 }
 
+// o modelo às vezes entrega o array embrulhado como texto JSON —
+// desembrulha o que vier até encontrar as variações de verdade
+function normalizarVariacoes(entrada) {
+  if (!entrada) return null;
+  let valor = entrada.variacoes !== undefined ? entrada.variacoes : entrada;
+  for (let nivel = 0; nivel < 2 && typeof valor === 'string'; nivel++) {
+    try { valor = JSON.parse(valor); } catch (_) { return null; }
+  }
+  if (valor && !Array.isArray(valor) && Array.isArray(valor.variacoes)) valor = valor.variacoes;
+  return Array.isArray(valor) ? valor.filter((v) => v && typeof v === 'object') : null;
+}
+
 function montarPrompt(corpo) {
   const { modelo, plano, marca } = corpo;
   const listaSlots = modelo.slots
@@ -223,9 +235,10 @@ async function gerar(pedido, env) {
   const dados = await respostaApi.json();
   const uso = dados.usage || {};
   const blocoFerramenta = (dados.content || []).find((b) => b.type === 'tool_use');
-  const variacoes = blocoFerramenta && blocoFerramenta.input && blocoFerramenta.input.variacoes;
+  const variacoes = normalizarVariacoes(blocoFerramenta && blocoFerramenta.input);
 
   if (!Array.isArray(variacoes) || !variacoes.length) {
+    console.log('Resposta sem variações:', JSON.stringify(dados).slice(0, 400));
     return resposta({ erro: 'A IA respondeu em um formato inesperado. Tente de novo.' }, 502);
   }
 

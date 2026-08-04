@@ -9,14 +9,10 @@
     "binding": "ASSETS"
   }
 
-  // MODELOS DA EQUIPE (recomendado): para os modelos criados no app valerem
-  // para todos os designers, crie o KV e descomente o bloco abaixo com o id
-  // que o comando devolver:
-  //   npx wrangler kv namespace create MODELOS
-  //
-  // ,"kv_namespaces": [
-  //   { "binding": "MODELOS", "id": "COLE_AQUI_O_ID_GERADO" }
-  // ]
+  // Armazenamento central da equipe (modelos, acessos e produtividade)
+  ,"kv_namespaces": [
+    { "binding": "MODELOS", "id": "170145fa791048078cf44129f21033f6" }
+  ]
 
   // A chave da IA NÃO fica aqui: rode `wrangler secret put ANTHROPIC_API_KEY`
   // e `wrangler secret put ACCESS_CODES` após o primeiro deploy.
