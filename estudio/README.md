@@ -61,6 +61,9 @@ Veja os modelos de exemplo preenchidos em `galeria.html` (ex.:
 
 ## Como publicar (Cloudflare Workers)
 
+> **Primeira vez publicando?** Siga o passo a passo completo, pensado
+> para quem nunca usou terminal: [`PUBLICAR.md`](PUBLICAR.md).
+
 O app roda inteiro na Cloudflare: os arquivos estáticos ficam em
 `public/` e o `worker.js` expõe a rota `POST /api/gerar`, que chama a IA
 (Claude) usando uma chave que **nunca aparece no navegador**.
