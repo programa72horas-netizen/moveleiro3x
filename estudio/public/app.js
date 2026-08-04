@@ -616,7 +616,7 @@ function htmlDaArte() {
 }
 
 function ajustarEscalaPalco() {
-  const moldura = $('.palco-moldura');
+  const moldura = $('#tela-estudio .palco-moldura');
   const caixa = $('#palco-caixa');
   const larguraUtil = moldura.clientWidth - 36; // desconta o padding
   const fator = Math.min(1, larguraUtil / 1080);
