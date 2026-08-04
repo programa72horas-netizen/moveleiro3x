@@ -59,6 +59,85 @@
     <div id="grade-modelos"></div>
   </section>
 
+  <!-- ===================== MEUS MODELOS · EDITOR ===================== -->
+  <section class="tela" id="tela-editor" hidden>
+    <div class="tela-cabecalho">
+      <h2 id="editor-titulo">Novo modelo</h2>
+      <p>Traga um layout seu: envie a imagem para a IA replicar, ou cole o HTML direto.
+         Textos editáveis usam marcadores como <code>{{titulo}}</code>; imagens, <code>{{imgFoto}}</code>;
+         dados da marca: <code>{{marcaNome}}</code>, <code>{{marcaLogo}}</code>,
+         <code>{{marcaWhatsapp}}</code>, <code>{{marcaEndereco}}</code>,
+         <code>{{marcaCor1}}</code> e <code>{{marcaCor2}}</code>.</p>
+    </div>
+    <div class="editor-grade">
+      <div class="editor-form">
+        <div class="cartao">
+          <h3>Identificação</h3>
+          <div class="linha-campos">
+            <label class="campo campo-crescer"><span>Nome do modelo</span>
+              <input id="editor-nome" maxlength="60" placeholder="Ex.: Oferta guarda-roupa vermelho"/></label>
+            <label class="campo"><span>Fase</span>
+              <select id="editor-fase">
+                <option value="0">Meus modelos</option>
+                <option value="1">Fase 1 · Curiosidade</option>
+                <option value="2">Fase 2 · Oferta</option>
+                <option value="3">Fase 3 · Urgência</option>
+              </select></label>
+          </div>
+          <label class="campo"><span>Resumo (aparece no cartão do modelo)</span>
+            <input id="editor-resumo" maxlength="160" placeholder="Quando usar este modelo?"/></label>
+        </div>
+
+        <div class="cartao">
+          <h3>Replicar de uma imagem (IA)</h3>
+          <p class="painel-dica">Envie o print de um modelo que você já usa. A IA recria o layout
+             <strong>uma única vez</strong>; você confere na prévia, ajusta e salva —
+             depois ele fica travado como os demais.</p>
+          <div class="linha-campos">
+            <label class="campo campo-crescer"><span>Imagem do modelo</span>
+              <input type="file" id="editor-imagem" accept="image/png,image/jpeg,image/webp"/></label>
+          </div>
+          <label class="campo"><span>Observações para a IA (opcional)</span>
+            <input id="editor-observacoes" maxlength="200"
+                   placeholder="Ex.: o preço fica no selo amarelo; a foto ocupa a metade de cima"/></label>
+          <div class="linha-campos" style="margin-top:10px">
+            <button class="botao botao-primario" id="botao-replicar" type="button">✦ Replicar layout com IA</button>
+            <span class="exportar-status" id="editor-status"></span>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <h3>HTML do layout (1080×1350)</h3>
+          <label class="campo">
+            <textarea id="editor-html" rows="14" spellcheck="false"
+              placeholder='&lt;div class="a72" style="background:#111;color:#fff"&gt; … {{titulo}} … &lt;/div&gt;'></textarea>
+          </label>
+        </div>
+
+        <div class="cartao">
+          <h3>Campos do modelo</h3>
+          <p class="painel-dica">Detectados automaticamente pelos marcadores do HTML.
+             Ajuste rótulo, limite de caracteres e tipo.</p>
+          <div id="editor-slots"></div>
+        </div>
+
+        <div class="plano-acoes">
+          <button class="botao botao-fantasma" id="botao-editor-cancelar" type="button">← Voltar</button>
+          <button class="botao botao-fantasma" id="botao-editor-excluir" type="button" hidden>Excluir modelo</button>
+          <button class="botao botao-primario" id="botao-editor-salvar" type="button">Salvar modelo</button>
+        </div>
+      </div>
+      <aside class="editor-previa">
+        <h3>Prévia ao vivo</h3>
+        <div class="palco-moldura">
+          <div class="palco-caixa" id="editor-palco-caixa">
+            <div class="palco" id="editor-palco"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
   <!-- ===================== PASSO 2 · PLANEJAMENTO ===================== -->
   <section class="tela" id="tela-plano" hidden>
     <div class="tela-cabecalho">

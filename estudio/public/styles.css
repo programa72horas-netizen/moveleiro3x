@@ -222,6 +222,57 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 
 .painel-rodape { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 
+/* ---------- editor de modelos próprios ---------- */
+
+.editor-grade { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 22px; align-items: start; }
+.editor-form { display: grid; gap: 18px; }
+
+.editor-previa { position: sticky; top: 86px; }
+.editor-previa h3 { margin: 0 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-2); }
+
+#editor-html {
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: 12.5px; line-height: 1.5; white-space: pre; overflow-x: auto;
+}
+
+.tela-cabecalho code {
+  background: var(--fundo-3); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 1px 6px; font-size: 12.5px;
+}
+
+.linha-slot {
+  display: grid; grid-template-columns: 110px 1fr 74px 96px 74px 1fr; gap: 10px;
+  align-items: center; padding: 8px 0; border-bottom: 1px solid var(--borda);
+}
+.linha-slot:last-child { border-bottom: none; }
+.linha-slot .slot-chave { font-family: Consolas, monospace; font-size: 12.5px; color: var(--acento-2); overflow-wrap: anywhere; }
+.linha-slot input, .linha-slot select {
+  background: var(--fundo-3); border: 1px solid var(--borda); border-radius: 8px;
+  color: var(--texto); padding: 8px 9px; font-size: 13px; width: 100%;
+}
+.linha-slot label.slot-multi { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--texto-2); }
+.linha-slot-cabecalho { display: grid; grid-template-columns: 110px 1fr 74px 96px 74px 1fr; gap: 10px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-2); padding-bottom: 6px; }
+
+.editor-slots-vazio { color: var(--texto-2); font-size: 14px; padding: 8px 0; }
+
+.cartao-modelo-acoes { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.botao-mini { padding: 7px 12px; font-size: 13px; border-radius: 9px; }
+
+.cartao-adicionar {
+  border: 2px dashed var(--borda); border-radius: var(--raio); background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 240px; color: var(--texto-2); cursor: pointer; font-weight: 600;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.cartao-adicionar:hover { border-color: var(--acento); color: var(--texto); }
+.cartao-adicionar .mais { font-size: 42px; line-height: 1; color: var(--acento); font-weight: 800; }
+
+@media (max-width: 1080px) {
+  .editor-grade { grid-template-columns: 1fr; }
+  .editor-previa { position: static; }
+}
+
 /* ---------- histórico ---------- */
 
 #lista-historico { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }

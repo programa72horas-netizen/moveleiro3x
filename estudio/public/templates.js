@@ -589,18 +589,86 @@ const MODELOS = [
   },
 ];
 
+/* ---------- modelos personalizados (criados pela própria equipe) ---------- */
+/*
+ * Um modelo personalizado é HTML de 1080×1350 com marcadores no texto:
+ *   {{titulo}}, {{preco}}, {{imgFoto}}…  → viram campos editáveis (slots)
+ * Marcadores reservados preenchidos pela marca escolhida:
+ *   {{marcaNome}} {{marcaCor1}} {{marcaCor2}} {{marcaLogo}}
+ *   {{marcaWhatsapp}} {{marcaEndereco}}
+ * Chaves que começam com "img" viram campos de imagem automaticamente.
+ */
+
+const PERSONALIZADOS = [];
+
+const MARCADOR = /\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g;
+
+function chavesDoHtml(html) {
+  const chaves = [];
+  for (const m of String(html || '').matchAll(MARCADOR)) {
+    if (!m[1].startsWith('marca') && !chaves.includes(m[1])) chaves.push(m[1]);
+  }
+  return chaves;
+}
+
+function compilarPersonalizado(def) {
+  const slots = Array.isArray(def.slots) ? def.slots : [];
+  return {
+    id: def.id,
+    fase: [0, 1, 2, 3].includes(def.fase) ? def.fase : 0,
+    nome: def.nome || 'Modelo sem nome',
+    resumo: def.resumo || 'Modelo personalizado.',
+    html: def.html || '',
+    origem: def.origem || 'local',
+    personalizado: true,
+    slots,
+    render(s, marca) {
+      const daMarca = {
+        marcaNome: Fmt.esc(marca.nome || 'SUA LOJA'),
+        marcaCor1: Fmt.hex(marca.corPrimaria, '#E3242B'),
+        marcaCor2: Fmt.hex(marca.corSecundaria, '#FFC400'),
+        marcaLogo: typeof marca.logo === 'string' ? marca.logo : '',
+        marcaWhatsapp: Fmt.esc(marca.whatsapp || ''),
+        marcaEndereco: Fmt.esc(marca.endereco || ''),
+      };
+      const html = String(def.html || '').replace(MARCADOR, (tudo, chave) => {
+        if (chave in daMarca) return daMarca[chave];
+        const slot = slots.find((x) => x.key === chave);
+        if (!slot) return '';
+        const valor = s[chave];
+        if (slot.tipo === 'imagem') return typeof valor === 'string' ? valor : '';
+        return Fmt.linhas(valor ?? '');
+      });
+      // garante o quadro 1080×1350 mesmo se o HTML não trouxer a classe a72
+      return /class\s*=\s*["'][^"']*\ba72\b/.test(html) ? html : `<div class="a72">${html}</div>`;
+    },
+  };
+}
+
 /* ---------- API pública ---------- */
 
 const Modelos = {
-  lista: MODELOS,
+  embutidos: MODELOS,
+  personalizados: PERSONALIZADOS,
+  get lista() { return [...MODELOS, ...PERSONALIZADOS]; },
   css: ARTE_CSS,
   porId(id) {
-    return MODELOS.find((m) => m.id === id) || null;
+    return MODELOS.find((m) => m.id === id) || PERSONALIZADOS.find((m) => m.id === id) || null;
   },
+  // substitui a lista de modelos personalizados (vindos da nuvem/local)
+  registrarPersonalizados(defs) {
+    PERSONALIZADOS.length = 0;
+    for (const def of defs || []) {
+      if (def && def.id && def.html) PERSONALIZADOS.push(compilarPersonalizado(def));
+    }
+  },
+  compilarPersonalizado,
+  chavesDoHtml,
   fases: {
     1: { nome: 'Fase 1 · Curiosidade', resumo: 'Antecipação, mistério e comunicados oficiais.' },
     2: { nome: 'Fase 2 · Oferta', resumo: 'Venda explosiva: produto herói, preço e condições.' },
     3: { nome: 'Fase 3 · Urgência', resumo: 'Últimas horas: comandos curtos, prazo e escassez.' },
+    0: { nome: 'Meus modelos', resumo: 'Layouts próprios da sua operação, criados no próprio app.' },
   },
   // valores de exemplo de um modelo (usados na galeria e no modo manual)
   exemplos(modelo) {

@@ -18,15 +18,39 @@ Aplicativo web para a equipe de design criar artes do **método 72 Horas**
   entram automaticamente em todos os modelos.
 - **Histórico** por designer, para reabrir e ajustar artes já feitas.
 
-## As 3 fases do método
+## Seus próprios modelos (o coração do app)
 
-| Fase | Modelos | Estilo |
+Na tela **Modelo**, a seção **"Meus modelos"** tem o botão
+**"+ Adicionar um modelo meu"**. Dá para trazer um layout de 3 jeitos:
+
+1. **Replicar de uma imagem (IA)** — envie o print/arquivo de um modelo
+   que você já usa. A IA recria o layout como HTML fiel **uma única
+   vez**; você confere na prévia ao vivo, ajusta os campos e salva.
+   Depois disso o layout fica **travado**: no dia a dia a IA só escreve
+   os textos, nunca mexe no desenho.
+2. **Colar HTML** — cole um layout de 1080×1350 com marcadores
+   `{{titulo}}`, `{{preco}}`, `{{imgFoto}}`… Cada marcador vira um campo
+   editável automaticamente. Marcadores da marca (`{{marcaNome}}`,
+   `{{marcaLogo}}`, `{{marcaWhatsapp}}`, `{{marcaEndereco}}`,
+   `{{marcaCor1}}`, `{{marcaCor2}}`) são preenchidos pelo cadastro do
+   cliente.
+3. **Editar um existente** — todo modelo criado no app tem o botão
+   **✎ Editar** no cartão.
+
+Com o **KV configurado** (veja abaixo), os modelos salvos valem para
+**toda a equipe**, em qualquer computador. Sem KV, cada navegador guarda
+os seus.
+
+Os modelos podem ser classificados nas fases do método ou em "Meus
+modelos":
+
+| Fase | Modelos de exemplo incluídos | Estilo |
 |---|---|---|
 | **1 · Curiosidade** | Comunicado Oficial · Acesso Restrito | Preto institucional, mistério, carimbo confidencial |
 | **2 · Oferta** | Oferta com Produto · Oferta Percentual | Gradiente da marca, produto herói, preço gigante |
 | **3 · Urgência** | Comando Gigante · Escassez de Estoque | Alerta, comandos curtos, prazo e estoque no fim |
 
-Veja todos os modelos preenchidos em `galeria.html` (ex.:
+Veja os modelos de exemplo preenchidos em `galeria.html` (ex.:
 `https://SEU-APP.workers.dev/galeria.html`).
 
 ## Como publicar (Cloudflare Workers)
@@ -47,6 +71,11 @@ npx wrangler secret put ANTHROPIC_API_KEY
 # formato: Nome:codigo,Nome 2:codigo2
 npx wrangler secret put ACCESS_CODES
 # exemplo de valor:  Deborah:7272,Designer 1:1111,Designer 2:2222,Designer 3:3333
+
+# (recomendado) armazenamento central dos SEUS modelos, para toda a equipe:
+npx wrangler kv namespace create MODELOS
+# copie o id que aparecer, descomente o bloco kv_namespaces no wrangler.jsonc
+# colando o id, e rode `npx wrangler deploy` de novo
 ```
 
 Pronto. O endereço do deploy já serve o app completo.
@@ -68,18 +97,12 @@ da Cloudflare (ex.: `claude-haiku-4-5-20251001` para custo mínimo).
 > cada geração de IA. É uma proteção adequada para equipe interna — não
 > use esses códigos para proteger dados sensíveis.
 
-## Como criar um modelo novo de layout
+## Modelos de exemplo (avançado)
 
-Os modelos vivem em `public/templates.js`. Cada um tem:
-
-- `id`, `fase`, `nome`, `resumo`;
-- `slots`: os campos que o designer/IA preenchem (com limite de
-  caracteres, exemplo e tipo `texto` ou `imagem`);
-- `render(slots, marca)`: o HTML/CSS fixo da arte (1080×1350).
-
-Copie um modelo existente, ajuste e pronto: ele aparece sozinho na
-grade do app, na galeria e no fluxo da IA. Confira o resultado em
-`galeria.html` antes de liberar para a equipe.
+Os 6 modelos de exemplo vivem em `public/templates.js`, escritos em
+código (`render(slots, marca)`). Só é preciso mexer neles se quiser
+mudar os exemplos — os modelos do dia a dia se criam pelo próprio app,
+na seção "Meus modelos".
 
 ## Estrutura
 
