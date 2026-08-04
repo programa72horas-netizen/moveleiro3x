@@ -4,24 +4,26 @@
   <meta charset="utf-8" />
   <title>Copiloto de Tráfego ARS — Configurações</title>
   <style>
-    :root { color-scheme: light dark; }
+    :root { color-scheme: light; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 760px;
+      max-width: 780px;
       margin: 0 auto;
       padding: 32px 20px 60px;
       line-height: 1.5;
+      color: #2a1220;
+      background: #fff;
     }
     h1 { font-size: 22px; margin-bottom: 4px; }
     .subtitulo { color: #6b7280; margin-top: 0; }
     fieldset {
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
+      border: 1px solid #ecd2e0;
+      border-radius: 12px;
       padding: 16px 18px;
       margin: 18px 0;
     }
-    legend { font-weight: 700; padding: 0 6px; }
-    label { display: block; font-weight: 600; margin: 12px 0 4px; }
+    legend { font-weight: 700; padding: 0 6px; color: #9d095e; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; }
     .ajuda { font-weight: 400; color: #6b7280; font-size: 13px; margin: 2px 0 6px; }
     input[type="text"], input[type="password"], select, textarea {
       width: 100%;
@@ -32,9 +34,27 @@
       font-size: 14px;
       font-family: inherit;
     }
-    textarea { min-height: 300px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+    textarea { min-height: 88px; font-size: 13.5px; }
+    #playbookLivre { min-height: 320px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
     .linha-radio { display: flex; gap: 18px; margin-top: 6px; }
     .linha-radio label { display: flex; align-items: center; gap: 6px; font-weight: 500; margin: 0; }
+
+    .cartoes-treino { display: flex; gap: 12px; margin: 10px 0 4px; }
+    .cartao-treino {
+      flex: 1;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+    .cartao-treino:hover { border-color: #d1a7c1; }
+    .cartao-treino.ativo { border-color: #9d095e; background: #faf2f7; }
+    .cartao-treino .ico { font-size: 22px; }
+    .cartao-treino .nome { font-weight: 700; margin-top: 4px; }
+    .cartao-treino .desc { font-size: 12.5px; color: #6b7280; margin-top: 2px; }
+
     button {
       margin-top: 20px;
       padding: 10px 22px;
@@ -47,13 +67,19 @@
       cursor: pointer;
     }
     button:hover { background: #7c0749; }
+    button.secundario {
+      background: #6b7280;
+      font-size: 13px;
+      padding: 6px 14px;
+      margin-top: 8px;
+    }
     #status { margin-left: 12px; font-weight: 600; color: #059669; }
     .oculto { display: none; }
   </style>
 </head>
 <body>
   <h1>Copiloto de Tráfego ARS — Gerenciador de Anúncios</h1>
-  <p class="subtitulo">Configure a conexão com a IA e as metas do negócio (é com elas que a IA julga os números).</p>
+  <p class="subtitulo">Configure a conexão com a IA e o treinamento do copiloto (é com as metas que a IA julga os números).</p>
 
   <fieldset>
     <legend>Conexão</legend>
@@ -89,11 +115,47 @@
   </fieldset>
 
   <fieldset>
-    <legend>Metas e instruções para a IA</legend>
-    <label for="playbook">Contexto do negócio, metas e regras de decisão</label>
-    <p class="ajuda">É aqui que você diz para a IA o que é "bom" e o que é "ruim" nesta conta: CPL alvo, CPA máximo, ROAS mínimo, orçamento, ticket médio, e as suas regras de otimização. <strong>Use os números reais</strong> — a IA compara a tabela do Gerenciador com o que estiver aqui.</p>
-    <textarea id="playbook" spellcheck="false"></textarea>
-    <button id="usarExemplo" type="button" style="margin-top:8px;background:#6b7280;font-size:13px;padding:6px 14px;">Preencher com exemplo (negócio local)</button>
+    <legend>Treinamento do Copiloto</legend>
+    <p class="ajuda">É com este conteúdo que a IA decide o que é "bom" e o que é "ruim" nesta conta. <strong>Use os números reais</strong> — a IA compara a tabela do Gerenciador com o que estiver aqui.</p>
+
+    <div class="cartoes-treino">
+      <div class="cartao-treino ativo" id="cartao-basico" data-modo="basico">
+        <div class="ico">📋</div>
+        <div class="nome">Básico</div>
+        <div class="desc">Formulário guiado — responda as perguntas e o treinamento se monta sozinho</div>
+      </div>
+      <div class="cartao-treino" id="cartao-avancado" data-modo="avancado">
+        <div class="ico">🎓</div>
+        <div class="nome">Avançado</div>
+        <div class="desc">Texto livre — controle total sobre o treinamento, no seu formato</div>
+      </div>
+    </div>
+
+    <div id="treino-basico">
+      <label for="tNegocio">1. Sobre o negócio</label>
+      <p class="ajuda">O que vende, ticket médio, margem, região, e como é o funil (anúncio → o quê → venda).</p>
+      <textarea id="tNegocio" placeholder="Ex.: Clínica de estética em Caxias do Sul. Ticket médio R$ 350, margem ~40%. Funil: anúncio → formulário → atendimento no WhatsApp → agendamento."></textarea>
+
+      <label for="tMetas">2. Metas da conta</label>
+      <p class="ajuda">Os números que definem sucesso: CPL alvo, CPA máximo, ROAS mínimo, CTR de referência, orçamento.</p>
+      <textarea id="tMetas" placeholder="Ex.: CPL alvo até R$ 12 (acima de R$ 18 é problema). CPA máximo R$ 90. ROAS mínimo 3.0 (ideal 4.0+). CTR bom acima de 1,2%. Orçamento total R$ 3.000/mês — nunca sugerir escala acima disso."></textarea>
+
+      <label for="tRegras">3. Regras de decisão</label>
+      <p class="ajuda">Quando pausar, quanto escalar por vez, gasto mínimo antes de decidir.</p>
+      <textarea id="tRegras" placeholder="Ex.: Só pausar conjunto com R$ 50+ gastos OU 1.000+ impressões. Escalar no máximo 20% por vez, a cada 2-3 dias. Manter 2+ criativos ativos por conjunto. Remarketing tem CPL alvo diferente: até R$ 6."></textarea>
+
+      <label for="tContexto">4. Contexto atual</label>
+      <p class="ajuda">Oferta rodando, sazonalidade, histórico do que funciona — atualize quando mudar.</p>
+      <textarea id="tContexto" placeholder="Ex.: Campanha principal: captação para [oferta]. Sazonalidade: janeiro fraco, Dia das Mães é pico. Histórico: vídeo com depoimento sempre supera arte estática."></textarea>
+    </div>
+
+    <div id="treino-avancado" class="oculto">
+      <label for="playbookLivre">Treinamento (texto livre)</label>
+      <p class="ajuda">Escreva no formato que quiser. Dica: títulos com ## ajudam a IA a se organizar.</p>
+      <textarea id="playbookLivre" spellcheck="false"></textarea>
+    </div>
+
+    <button id="usarExemplo" type="button" class="secundario">Preencher com exemplo (negócio local)</button>
   </fieldset>
 
   <button id="salvar" type="button">Salvar configurações</button>

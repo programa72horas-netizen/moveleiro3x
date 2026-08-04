@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Copiloto de Tráfego ARS — Gerenciador de Anúncios",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "O copiloto de tráfego da Academia das Redes Sociais: IA que lê as métricas do Gerenciador de Anúncios e devolve diagnóstico, otimizações e novas campanhas com base nas suas metas.",
   "icons": {
     "16": "icones/icone-16.png",

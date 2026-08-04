@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Copiloto de Vendas ARS — WhatsApp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "O copiloto de vendas da Academia das Redes Sociais: IA que analisa a conversa aberta no WhatsApp Web e sugere a próxima resposta com base no seu playbook.",
   "icons": {
     "16": "icones/icone-16.png",

@@ -4,24 +4,26 @@
   <meta charset="utf-8" />
   <title>Copiloto de Vendas ARS — Configurações</title>
   <style>
-    :root { color-scheme: light dark; }
+    :root { color-scheme: light; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 760px;
+      max-width: 780px;
       margin: 0 auto;
       padding: 32px 20px 60px;
       line-height: 1.5;
+      color: #2a1220;
+      background: #fff;
     }
     h1 { font-size: 22px; margin-bottom: 4px; }
     .subtitulo { color: #6b7280; margin-top: 0; }
     fieldset {
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
+      border: 1px solid #ecd2e0;
+      border-radius: 12px;
       padding: 16px 18px;
       margin: 18px 0;
     }
-    legend { font-weight: 700; padding: 0 6px; }
-    label { display: block; font-weight: 600; margin: 12px 0 4px; }
+    legend { font-weight: 700; padding: 0 6px; color: #9d095e; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; }
     .ajuda { font-weight: 400; color: #6b7280; font-size: 13px; margin: 2px 0 6px; }
     input[type="text"], input[type="password"], select, textarea {
       width: 100%;
@@ -32,9 +34,28 @@
       font-size: 14px;
       font-family: inherit;
     }
-    textarea { min-height: 260px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+    textarea { min-height: 88px; font-size: 13.5px; }
+    #playbookLivre { min-height: 320px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
     .linha-radio { display: flex; gap: 18px; margin-top: 6px; }
     .linha-radio label { display: flex; align-items: center; gap: 6px; font-weight: 500; margin: 0; }
+
+    /* Cartões de modo de treinamento (Básico / Avançado) */
+    .cartoes-treino { display: flex; gap: 12px; margin: 10px 0 4px; }
+    .cartao-treino {
+      flex: 1;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+    .cartao-treino:hover { border-color: #d1a7c1; }
+    .cartao-treino.ativo { border-color: #9d095e; background: #faf2f7; }
+    .cartao-treino .ico { font-size: 22px; }
+    .cartao-treino .nome { font-weight: 700; margin-top: 4px; }
+    .cartao-treino .desc { font-size: 12.5px; color: #6b7280; margin-top: 2px; }
+
     button {
       margin-top: 20px;
       padding: 10px 22px;
@@ -47,13 +68,19 @@
       cursor: pointer;
     }
     button:hover { background: #7c0749; }
+    button.secundario {
+      background: #6b7280;
+      font-size: 13px;
+      padding: 6px 14px;
+      margin-top: 8px;
+    }
     #status { margin-left: 12px; font-weight: 600; color: #059669; }
     .oculto { display: none; }
   </style>
 </head>
 <body>
   <h1>Copiloto de Vendas ARS — WhatsApp</h1>
-  <p class="subtitulo">Configure a conexão com a IA e o conhecimento do seu negócio (playbook).</p>
+  <p class="subtitulo">Configure a conexão com a IA e o treinamento do copiloto.</p>
 
   <fieldset>
     <legend>Conexão</legend>
@@ -89,17 +116,57 @@
   </fieldset>
 
   <fieldset>
-    <legend>Seu negócio</legend>
-    <label for="nomeVendedor">Nome do vendedor (opcional)</label>
-    <input type="text" id="nomeVendedor" placeholder="Ex.: Ana" />
+    <legend>Treinamento do Copiloto</legend>
+    <p class="ajuda">É o conhecimento que a IA usa para sugerir as mensagens. <strong>Use os dados reais do seu negócio</strong> — a IA trata este conteúdo como verdade.</p>
 
-    <label for="tom">Tom de voz das mensagens (opcional)</label>
-    <input type="text" id="tom" placeholder="Ex.: próximo e consultivo, sem gíria, chama o cliente pelo nome" />
+    <div class="cartoes-treino">
+      <div class="cartao-treino ativo" id="cartao-basico" data-modo="basico">
+        <div class="ico">📋</div>
+        <div class="nome">Básico</div>
+        <div class="desc">Formulário guiado — responda as perguntas e o treinamento se monta sozinho</div>
+      </div>
+      <div class="cartao-treino" id="cartao-avancado" data-modo="avancado">
+        <div class="ico">🎓</div>
+        <div class="nome">Avançado</div>
+        <div class="desc">Texto livre — controle total sobre o treinamento, no seu formato</div>
+      </div>
+    </div>
 
-    <label for="playbook">Playbook de vendas</label>
-    <p class="ajuda">Esse é o "conhecimento que você passa" para a IA: produtos, preços, condições, diferenciais, objeções comuns e como responder. Quanto melhor o playbook, melhores as sugestões. <strong>Use os dados reais do seu negócio</strong> — a IA trata este texto como verdade.</p>
-    <textarea id="playbook" spellcheck="false"></textarea>
-    <button id="usarExemplo" type="button" style="margin-top:8px;background:#6b7280;font-size:13px;padding:6px 14px;">Preencher com exemplo (móveis planejados)</button>
+    <div id="treino-basico">
+      <label for="nomeVendedor">Nome do vendedor (opcional)</label>
+      <input type="text" id="nomeVendedor" placeholder="Ex.: Ana" />
+
+      <label for="tom">Tom de voz das mensagens</label>
+      <input type="text" id="tom" placeholder="Ex.: próximo e consultivo, sem gíria, chama o cliente pelo nome" />
+
+      <label for="tIdentidade">1. Identidade e posicionamento</label>
+      <p class="ajuda">Quem é o negócio, o que vende, para quem, e por que escolher vocês (diferenciais).</p>
+      <textarea id="tIdentidade" placeholder="Ex.: Loja de móveis planejados em Caxias do Sul. Atendemos famílias que querem cozinha e dormitório sob medida. Diferenciais: projeto 3D grátis, MDF naval, montagem própria, garantia de 5 anos."></textarea>
+
+      <label for="tProdutos">2. Produtos, preços e condições</label>
+      <p class="ajuda">Faixas de preço, formas de pagamento, prazos. O que a IA pode e não pode falar de valores.</p>
+      <textarea id="tProdutos" placeholder="Ex.: Cozinha a partir de R$ 12.000 (varia por tamanho/acabamento). Entrada de 30% + 10x sem juros. NUNCA passar preço fechado sem medição — dar faixa e puxar para a medição gratuita."></textarea>
+
+      <label for="tProcesso">3. Processo de venda</label>
+      <p class="ajuda">As etapas do primeiro contato até o fechamento — para a IA saber qual é o próximo passo certo.</p>
+      <textarea id="tProcesso" placeholder="Ex.: 1) Entender o ambiente e o prazo do cliente. 2) Convidar para o showroom OU agendar medição grátis. 3) Apresentar projeto 3D + orçamento em 48h. 4) Fechamento com condição especial da semana."></textarea>
+
+      <label for="tObjecoes">4. Objeções comuns e como responder</label>
+      <p class="ajuda">As 5+ objeções que você mais ouve e a resposta que funciona.</p>
+      <textarea id="tObjecoes" placeholder="Ex.: 'Tá caro' → mostrar custo por ano de uso (móvel dura 15+ anos), oferecer ajustar o projeto, não o preço. 'Vou pensar' → perguntar o que falta para decidir; segurar condição por 48h. 'Vi mais barato' → perguntar o que está incluso no outro orçamento."></textarea>
+
+      <label for="tRegras">5. Regras do atendimento</label>
+      <p class="ajuda">O que a IA nunca deve sugerir; comportamentos obrigatórios.</p>
+      <textarea id="tRegras" placeholder="Ex.: Sempre puxar para o próximo passo concreto (medição > visita > orçamento). Nunca prometer prazo de entrega sem confirmar com a fábrica. Sempre chamar o cliente pelo nome."></textarea>
+    </div>
+
+    <div id="treino-avancado" class="oculto">
+      <label for="playbookLivre">Treinamento (texto livre)</label>
+      <p class="ajuda">Escreva no formato que quiser. Dica: títulos com ## ajudam a IA a se organizar.</p>
+      <textarea id="playbookLivre" spellcheck="false"></textarea>
+    </div>
+
+    <button id="usarExemplo" type="button" class="secundario">Preencher com exemplo (móveis planejados)</button>
   </fieldset>
 
   <button id="salvar" type="button">Salvar configurações</button>
