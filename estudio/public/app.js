@@ -11,16 +11,19 @@
 'use strict';
 
 /* ================== CONFIGURAÇÃO ==================
- * Cadastre aqui a equipe. O mesmo nome + código deve estar
- * na variável ACCESS_CODES do worker (veja o README).
+ * A equipe de verdade é gerida pela tela "Equipe" (admin) e vive no
+ * servidor. A lista abaixo é só o RESERVA para quando o app roda sem
+ * servidor (demonstração/estático) — mantenha-a mínima.
  */
 const CONFIG = {
-  DESIGNERS: [
-    { nome: 'Deborah', pin: '7272' },
-    { nome: 'Designer 1', pin: '1111' },
-    { nome: 'Designer 2', pin: '2222' },
-    { nome: 'Designer 3', pin: '3333' },
+  DESIGNERS_RESERVA: [
+    { nome: 'Deborah', pin: '7272', admin: true },
+    { nome: 'Designer 1', pin: '1111', admin: false },
+    { nome: 'Designer 2', pin: '2222', admin: false },
+    { nome: 'Designer 3', pin: '3333', admin: false },
   ],
+  // false = versão final limpa: só os modelos criados pela equipe aparecem
+  MODELOS_EXEMPLO: typeof window !== 'undefined' && !!window.E72_MOSTRAR_EXEMPLOS,
   MARCA_PADRAO: {
     id: 'padrao',
     nome: 'Sua Loja de Móveis',
@@ -38,6 +41,7 @@ const CONFIG = {
 const Estado = {
   designer: null,          // { nome }
   pin: null,
+  admin: false,
   marcas: [],
   arte: null,              // arte em edição (veja novaArte)
   telaAtual: 'login',
@@ -52,8 +56,22 @@ function novaArte(modeloId) {
     imagens: {},           // slotKey → dataURL
     variacoes: [],         // [{ slotKey: texto }]
     variacaoAtiva: 0,
+    ajustes: {},           // ajustes visuais por variação: { indice: { eid: {...} } }
+    registrada: false,     // já contou na produtividade?
     criadaEm: Date.now(),
   };
+}
+
+// aviso de produtividade: dispara e esquece — nunca atrapalha o fluxo
+function contarEvento(tipo, quantidade = 1) {
+  if (!Estado.designer) return;
+  try {
+    fetch('api/eventos', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ designer: Estado.designer.nome, pin: Estado.pin, tipo, quantidade }),
+    }).catch(() => {});
+  } catch (_) { /* sem servidor, sem contagem */ }
 }
 
 /* ================== PERSISTÊNCIA ================== */
@@ -109,7 +127,7 @@ function avisar(mensagem, erro = false) {
 
 /* ================== NAVEGAÇÃO ================== */
 
-const TELAS = ['login', 'modelos', 'plano', 'estudio', 'historico', 'editor'];
+const TELAS = ['login', 'modelos', 'plano', 'estudio', 'historico', 'editor', 'equipe'];
 
 function mostrarTela(nome) {
   Estado.telaAtual = nome;
@@ -124,6 +142,7 @@ function mostrarTela(nome) {
   document.querySelector('[data-tela="estudio"]').disabled = !temArte || !Estado.arte.variacoes.length;
   if (nome === 'modelos') montarGradeModelos();
   if (nome === 'historico') montarHistorico();
+  if (nome === 'equipe') montarTelaEquipe();
   window.scrollTo(0, 0);
 }
 
@@ -275,58 +294,104 @@ function montarCamposDeImagem() {
 
 let designerEscolhido = null;
 
-function iniciarLogin() {
+function montarChipsLogin(nomes) {
   const caixa = $('#login-designers');
   caixa.innerHTML = '';
-  for (const designer of CONFIG.DESIGNERS) {
-    const chip = el('button', 'chip-designer', designer.nome);
+  for (const nome of nomes) {
+    const chip = el('button', 'chip-designer', esc(nome));
     chip.type = 'button';
     chip.addEventListener('click', () => {
-      designerEscolhido = designer.nome;
+      designerEscolhido = nome;
       for (const c of caixa.children) c.classList.toggle('ativo', c === chip);
       $('#login-pin').focus();
     });
     caixa.appendChild(chip);
   }
+}
 
-  $('#form-login').addEventListener('submit', (evento) => {
+// o servidor é a fonte da verdade; a lista reserva só vale sem servidor
+async function carregarNomesEquipe() {
+  try {
+    const resposta = await fetch('api/equipe');
+    if (resposta.ok) {
+      const dados = await resposta.json();
+      if (Array.isArray(dados.nomes) && dados.nomes.length) {
+        montarChipsLogin(dados.nomes);
+        return;
+      }
+    }
+  } catch (_) { /* segue com a reserva */ }
+  montarChipsLogin(CONFIG.DESIGNERS_RESERVA.map((d) => d.nome));
+}
+
+async function validarEntrada(nome, pin) {
+  try {
+    const resposta = await fetch('api/entrar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nome, pin }),
+    });
+    if (resposta.ok) {
+      const dados = await resposta.json();
+      return { ok: true, admin: !!dados.admin };
+    }
+    if (resposta.status === 401) return { ok: false };
+  } catch (_) { /* sem servidor: cai na reserva */ }
+  const registro = CONFIG.DESIGNERS_RESERVA.find((d) => d.nome === nome && d.pin === pin);
+  return registro ? { ok: true, admin: !!registro.admin } : { ok: false };
+}
+
+function entrarNoEstudio(nome, pin, admin) {
+  Estado.designer = { nome };
+  Estado.pin = pin;
+  Estado.admin = admin;
+  Guardar.gravarSessao({ nome, pin, admin });
+  $('#usuario-nome').textContent = nome;
+  document.querySelector('[data-tela="equipe"]').hidden = !admin;
+  mostrarTela('modelos');
+  carregarModelosPersonalizados();
+}
+
+function iniciarLogin() {
+  carregarNomesEquipe();
+
+  $('#form-login').addEventListener('submit', async (evento) => {
     evento.preventDefault();
     $('#login-erro').hidden = true;
     const pin = $('#login-pin').value.trim();
-    const registro = CONFIG.DESIGNERS.find((d) => d.nome === designerEscolhido);
-    if (!registro || registro.pin !== pin) {
-      $('#login-erro').hidden = false;
-      return;
-    }
-    Estado.designer = { nome: registro.nome };
-    Estado.pin = pin;
-    Guardar.gravarSessao({ nome: registro.nome, pin });
-    $('#usuario-nome').textContent = registro.nome;
-    mostrarTela('modelos');
-    carregarModelosPersonalizados();
+    if (!designerEscolhido) { $('#login-erro').hidden = false; return; }
+    const botao = $('.login-entrar');
+    botao.disabled = true;
+    const resultado = await validarEntrada(designerEscolhido, pin);
+    botao.disabled = false;
+    if (!resultado.ok) { $('#login-erro').hidden = false; return; }
+    entrarNoEstudio(designerEscolhido, pin, resultado.admin);
   });
 
   $('#botao-sair').addEventListener('click', () => {
     Guardar.gravarSessao(null);
     Estado.designer = null;
     Estado.pin = null;
+    Estado.admin = false;
     Estado.arte = null;
+    document.querySelector('[data-tela="equipe"]').hidden = true;
     $('#login-pin').value = '';
     mostrarTela('login');
   });
 
-  // sessão lembrada (apenas nesta aba)
+  // sessão lembrada (apenas nesta aba); revalida em segundo plano
   const sessao = Guardar.lerSessao();
-  if (sessao) {
-    const registro = CONFIG.DESIGNERS.find((d) => d.nome === sessao.nome && d.pin === sessao.pin);
-    if (registro) {
-      Estado.designer = { nome: registro.nome };
-      Estado.pin = registro.pin;
-      $('#usuario-nome').textContent = registro.nome;
-      mostrarTela('modelos');
-      carregarModelosPersonalizados();
-      return;
-    }
+  if (sessao && sessao.nome && sessao.pin) {
+    entrarNoEstudio(sessao.nome, sessao.pin, !!sessao.admin);
+    validarEntrada(sessao.nome, sessao.pin).then((resultado) => {
+      if (!resultado.ok) { $('#botao-sair').click(); return; }
+      if (resultado.admin !== Estado.admin) {
+        Estado.admin = resultado.admin;
+        Guardar.gravarSessao({ nome: sessao.nome, pin: sessao.pin, admin: resultado.admin });
+        document.querySelector('[data-tela="equipe"]').hidden = !resultado.admin;
+      }
+    });
+    return;
   }
   registrarTodosPersonalizados([]); // modelos locais aparecem mesmo sem login prévio
   carregarModelosPersonalizados();
@@ -364,10 +429,11 @@ async function carregarModelosPersonalizados() {
 
 /* ================== PASSO 1 · MODELOS ================== */
 
-function miniaturaDeModelo(modelo, marca, valores) {
+function miniaturaDeModelo(modelo, marca, valores, ajustes) {
   const caixa = el('div', 'miniatura');
   const escala = el('div', 'mini-escala');
-  escala.innerHTML = `<style>${Modelos.css}</style>` + modelo.render(valores, marca);
+  const html = htmlComAjustes(modelo.render(valores, marca), ajustes);
+  escala.innerHTML = `<style>${Modelos.css}</style>` + html;
   caixa.appendChild(escala);
   // a escala real é aplicada depois que o cartão entra no DOM
   requestAnimationFrame(() => {
@@ -497,6 +563,7 @@ function aplicarVariacoes(variacoes) {
     Estado.arte.variacoes.push({ ...Estado.arte.variacoes[0] });
   }
   Estado.arte.variacaoAtiva = 0;
+  Estado.arte.ajustes = {}; // textos novos zeram os ajustes visuais
 }
 
 // extrai um valor monetário ("1.899,90") de um texto livre de condições
@@ -586,6 +653,7 @@ async function gerarComIA() {
       throw new Error('A IA respondeu em um formato inesperado.');
     }
     aplicarVariacoes(dados.variacoes);
+    contarEvento('geracao');
     abrirEstudio();
   } catch (erro) {
     if (Estado.arte !== arteDoPedido || Estado.telaAtual !== 'plano') return;
@@ -605,14 +673,220 @@ function valoresAtuais() {
   return Estado.arte.variacoes[Estado.arte.variacaoAtiva] || {};
 }
 
+/* ---------- ajustes visuais (tudo na arte é editável) ----------
+ * Cada elemento da arte recebe um índice estável (ordem no documento).
+ * Os ajustes do designer — mover, escalar, fonte, cor, ocultar — ficam
+ * em arte.ajustes[variação][índice] e valem para o preview E para o PNG.
+ */
+
+function ajustesDaVariacao(indice) {
+  const arte = Estado.arte;
+  if (!arte.ajustes) arte.ajustes = {};
+  if (!arte.ajustes[indice]) arte.ajustes[indice] = {};
+  return arte.ajustes[indice];
+}
+
+// aplica um ajuste a um elemento; base = transform original do modelo
+function aplicarAjusteNoElemento(elemento, ajuste, transformBase) {
+  if (ajuste.oculto) { elemento.style.display = 'none'; return; }
+  elemento.style.display = '';
+  const partes = [];
+  if (ajuste.dx || ajuste.dy) partes.push(`translate(${ajuste.dx || 0}px, ${ajuste.dy || 0}px)`);
+  if (transformBase) partes.push(transformBase);
+  if (ajuste.escala && ajuste.escala !== 1) partes.push(`scale(${ajuste.escala})`);
+  elemento.style.transform = partes.join(' ');
+  if (ajuste.fonte) elemento.style.fontSize = ajuste.fonte + 'px';
+  if (ajuste.cor) elemento.style.color = ajuste.cor;
+}
+
+// versão para exportação: aplica os ajustes num render recém-criado
+function htmlComAjustes(html, mapa) {
+  if (!mapa || !Object.keys(mapa).length) return html;
+  const caixa = document.createElement('div');
+  caixa.innerHTML = html;
+  const raiz = caixa.firstElementChild;
+  if (raiz) {
+    const elementos = [raiz, ...raiz.querySelectorAll('*')];
+    for (const [eid, ajuste] of Object.entries(mapa)) {
+      const elemento = elementos[Number(eid)];
+      if (elemento) aplicarAjusteNoElemento(elemento, ajuste, elemento.style.transform || '');
+    }
+  }
+  return caixa.innerHTML;
+}
+
 function htmlDaVariacao(indice) {
   const modelo = Modelos.porId(Estado.arte.modeloId);
   const valores = { ...(Estado.arte.variacoes[indice] || {}), ...Estado.arte.imagens };
-  return modelo.render(valores, marcaAtual());
+  const html = modelo.render(valores, marcaAtual());
+  return htmlComAjustes(html, (Estado.arte.ajustes || {})[indice]);
 }
 
 function htmlDaArte() {
   return htmlDaVariacao(Estado.arte.variacaoAtiva);
+}
+
+/* ---------- interação de ajuste no palco ---------- */
+
+const Ajuste = {
+  eid: null,          // elemento selecionado (índice)
+  arrasto: null,      // { x0, y0, dx0, dy0, moveu }
+};
+
+function elementoSelecionado() {
+  if (Ajuste.eid === null) return null;
+  return $('#palco') && $('#palco').querySelector(`[data-eid="${Ajuste.eid}"]`);
+}
+
+function ajusteAtual(criar = false) {
+  const mapa = ajustesDaVariacao(Estado.arte.variacaoAtiva);
+  if (!mapa[Ajuste.eid] && criar) mapa[Ajuste.eid] = {};
+  return mapa[Ajuste.eid] || null;
+}
+
+function limparAjusteVazio() {
+  const mapa = ajustesDaVariacao(Estado.arte.variacaoAtiva);
+  const ajuste = mapa[Ajuste.eid];
+  if (ajuste && !ajuste.dx && !ajuste.dy && !ajuste.escala && !ajuste.fonte && !ajuste.cor && !ajuste.oculto) {
+    delete mapa[Ajuste.eid];
+  }
+}
+
+function rotuloDoElemento(elemento) {
+  const texto = (elemento.textContent || '').trim().replace(/\s+/g, ' ');
+  if (texto) return texto.length > 28 ? texto.slice(0, 28) + '…' : texto;
+  if (elemento.tagName === 'IMG') return 'imagem';
+  return 'bloco';
+}
+
+function selecionarElemento(eid) {
+  const anterior = elementoSelecionado();
+  if (anterior) anterior.classList.remove('e72-selecionado');
+  Ajuste.eid = eid;
+  const barra = $('#ajuste-barra');
+  if (eid === null) { barra.hidden = true; return; }
+  const elemento = elementoSelecionado();
+  if (!elemento) { Ajuste.eid = null; barra.hidden = true; return; }
+  elemento.classList.add('e72-selecionado');
+  $('#ajuste-alvo').textContent = rotuloDoElemento(elemento);
+  const ajuste = ajusteAtual() || {};
+  $('#aj-cor').value = ajuste.cor || corComputada(elemento);
+  $('#aj-ocultar').textContent = ajuste.oculto ? 'Mostrar' : 'Ocultar';
+  barra.hidden = false;
+}
+
+function corComputada(elemento) {
+  const m = getComputedStyle(elemento).color.match(/\d+/g);
+  if (!m) return '#ffffff';
+  return '#' + m.slice(0, 3).map((c) => Number(c).toString(16).padStart(2, '0')).join('');
+}
+
+function repintarElementoSelecionado() {
+  const elemento = elementoSelecionado();
+  if (!elemento) return;
+  const ajuste = ajusteAtual() || {};
+  aplicarAjusteNoElemento(elemento, ajuste, elemento.dataset.e72Base || '');
+}
+
+function mudarAjuste(mudanca) {
+  if (Ajuste.eid === null) return;
+  const elemento = elementoSelecionado();
+  const ajuste = ajusteAtual(true);
+  if (mudanca.fonteDelta) {
+    const base = ajuste.fonte || Math.round(parseFloat(getComputedStyle(elemento).fontSize)) || 32;
+    ajuste.fonte = Math.max(8, base + mudanca.fonteDelta);
+  }
+  if (mudanca.escalaFator) {
+    ajuste.escala = Math.max(0.2, Math.min(4, +( (ajuste.escala || 1) * mudanca.escalaFator ).toFixed(3)));
+  }
+  if ('cor' in mudanca) ajuste.cor = mudanca.cor;
+  if (mudanca.alternarOculto) ajuste.oculto = !ajuste.oculto;
+  if (mudanca.zerar) {
+    delete ajustesDaVariacao(Estado.arte.variacaoAtiva)[Ajuste.eid];
+  }
+  repintarElementoSelecionado();
+  limparAjusteVazio();
+  $('#aj-ocultar').textContent = (ajusteAtual() || {}).oculto ? 'Mostrar' : 'Ocultar';
+  salvarNoHistorico();
+}
+
+let escalaPalcoAtual = 1;
+
+function prepararEdicaoVisual() {
+  const raiz = $('#palco').querySelector('.a72');
+  if (!raiz) return;
+  const elementos = [raiz, ...raiz.querySelectorAll('*')];
+  elementos.forEach((elemento, indice) => {
+    elemento.dataset.eid = indice;
+    // guarda o transform do modelo para compor com os ajustes sem acumular
+    elemento.dataset.e72Base = elemento.style.transform || '';
+  });
+  // reaplica a seleção (o palco acabou de ser re-renderizado)
+  if (Ajuste.eid !== null) {
+    const selecionado = raiz.querySelector(`[data-eid="${Ajuste.eid}"]`) || null;
+    if (selecionado) selecionado.classList.add('e72-selecionado');
+    else selecionarElemento(null);
+  }
+}
+
+function iniciarEdicaoVisual() {
+  const palco = $('#palco');
+
+  palco.addEventListener('pointerdown', (evento) => {
+    const alvo = evento.target.closest('[data-eid]');
+    if (!alvo || !palco.contains(alvo)) return;
+    const eid = Number(alvo.dataset.eid);
+    if (eid === 0) { selecionarElemento(null); return; } // fundo = tirar seleção
+    evento.preventDefault();
+    selecionarElemento(eid);
+    const ajuste = ajusteAtual() || {};
+    Ajuste.arrasto = {
+      x0: evento.clientX, y0: evento.clientY,
+      dx0: ajuste.dx || 0, dy0: ajuste.dy || 0, moveu: false,
+    };
+    palco.setPointerCapture(evento.pointerId);
+  });
+
+  palco.addEventListener('pointermove', (evento) => {
+    if (!Ajuste.arrasto || Ajuste.eid === null) return;
+    const dx = (evento.clientX - Ajuste.arrasto.x0) / escalaPalcoAtual;
+    const dy = (evento.clientY - Ajuste.arrasto.y0) / escalaPalcoAtual;
+    if (!Ajuste.arrasto.moveu && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+    Ajuste.arrasto.moveu = true;
+    const ajuste = ajusteAtual(true);
+    ajuste.dx = Math.round(Ajuste.arrasto.dx0 + dx);
+    ajuste.dy = Math.round(Ajuste.arrasto.dy0 + dy);
+    repintarElementoSelecionado();
+  });
+
+  const soltar = () => {
+    if (Ajuste.arrasto && Ajuste.arrasto.moveu) {
+      limparAjusteVazio();
+      salvarNoHistorico();
+    }
+    Ajuste.arrasto = null;
+  };
+  palco.addEventListener('pointerup', soltar);
+  palco.addEventListener('pointercancel', soltar);
+
+  document.addEventListener('keydown', (evento) => {
+    if (evento.key === 'Escape' && Estado.telaAtual === 'estudio') selecionarElemento(null);
+  });
+
+  $('#aj-fonte-menos').addEventListener('click', () => mudarAjuste({ fonteDelta: -4 }));
+  $('#aj-fonte-mais').addEventListener('click', () => mudarAjuste({ fonteDelta: 4 }));
+  $('#aj-escala-menos').addEventListener('click', () => mudarAjuste({ escalaFator: 1 / 1.1 }));
+  $('#aj-escala-mais').addEventListener('click', () => mudarAjuste({ escalaFator: 1.1 }));
+  $('#aj-cor').addEventListener('input', (evento) => mudarAjuste({ cor: evento.target.value }));
+  $('#aj-ocultar').addEventListener('click', () => mudarAjuste({ alternarOculto: true }));
+  $('#aj-zerar').addEventListener('click', () => mudarAjuste({ zerar: true }));
+  $('#aj-fechar').addEventListener('click', () => selecionarElemento(null));
+  $('#aj-zerar-tudo').addEventListener('click', () => {
+    Estado.arte.ajustes[Estado.arte.variacaoAtiva] = {};
+    selecionarElemento(null);
+    pintarArte();
+    salvarNoHistorico();
+  });
 }
 
 function ajustarEscalaPalco() {
@@ -620,14 +894,25 @@ function ajustarEscalaPalco() {
   const caixa = $('#palco-caixa');
   const larguraUtil = moldura.clientWidth - 36; // desconta o padding
   const fator = Math.min(1, larguraUtil / 1080);
+  escalaPalcoAtual = fator;
   caixa.style.width = Math.round(1080 * fator) + 'px';
   caixa.style.height = Math.round(1350 * fator) + 'px';
   $('#palco').style.transform = `scale(${fator})`;
 }
 
 function pintarArte() {
-  $('#palco').innerHTML = `<style>${Modelos.css}</style>` + htmlDaArte();
+  // renderiza o modelo cru e aplica os ajustes no DOM vivo — assim cada
+  // elemento sabe seu transform original e os ajustes nunca se acumulam
+  const modelo = Modelos.porId(Estado.arte.modeloId);
+  const valores = { ...valoresAtuais(), ...Estado.arte.imagens };
+  $('#palco').innerHTML = `<style>${Modelos.css}</style>` + modelo.render(valores, marcaAtual());
   ajustarEscalaPalco();
+  prepararEdicaoVisual();
+  const mapa = ajustesDaVariacao(Estado.arte.variacaoAtiva);
+  for (const [eid, ajuste] of Object.entries(mapa)) {
+    const elemento = $('#palco').querySelector(`[data-eid="${eid}"]`);
+    if (elemento) aplicarAjusteNoElemento(elemento, ajuste, elemento.dataset.e72Base || '');
+  }
 }
 
 function montarAbasVariacoes() {
@@ -639,6 +924,7 @@ function montarAbasVariacoes() {
     aba.type = 'button';
     aba.addEventListener('click', () => {
       Estado.arte.variacaoAtiva = indice;
+      selecionarElemento(null);
       montarAbasVariacoes();
       montarCamposSlots();
       pintarArte();
@@ -681,11 +967,18 @@ function montarCamposSlots() {
 
 function abrirEstudio() {
   const modelo = Modelos.porId(Estado.arte.modeloId);
-  $('#estudio-modelo-nome').textContent = modelo.nome + ' · Fase ' + modelo.fase;
+  $('#estudio-modelo-nome').textContent = modelo.personalizado
+    ? modelo.nome
+    : modelo.nome + ' · Fase ' + modelo.fase;
+  selecionarElemento(null);
   montarAbasVariacoes();
   montarCamposSlots();
   mostrarTela('estudio');
   pintarArte();
+  if (!Estado.arte.registrada) {
+    Estado.arte.registrada = true;
+    contarEvento('arte');
+  }
   salvarNoHistorico();
 }
 
@@ -711,6 +1004,7 @@ async function baixarAtual() {
   try {
     await Exportador.baixarPNG(html, Modelos.css, arquivo);
     status.textContent = 'PNG baixado ✓';
+    contarEvento('exportacao');
   } catch (erro) {
     status.textContent = '';
     avisar('Erro ao exportar: ' + erro.message, true);
@@ -744,6 +1038,7 @@ async function baixarTodas() {
       await new Promise((r) => setTimeout(r, 350));
     }
     status.textContent = baixadas + ' PNGs gerados ✓ — se o navegador pedir, permita múltiplos downloads';
+    contarEvento('exportacao', baixadas);
   } catch (erro) {
     avisar('Erro ao exportar (baixei ' + baixadas + ' de ' + trabalhos.length + '): ' + erro.message, true);
     status.textContent = '';
@@ -802,7 +1097,8 @@ function montarHistorico() {
     const cartao = el('div', 'cartao');
     const marca = Estado.marcas.find((m) => m.id === item.marcaId) || CONFIG.MARCA_PADRAO;
     const valores = { ...(item.variacoes[item.variacaoAtiva] || item.variacoes[0] || {}), ...item.imagens };
-    cartao.appendChild(miniaturaDeModelo(modelo, marca, valores));
+    cartao.appendChild(miniaturaDeModelo(modelo, marca, valores,
+      (item.ajustes || {})[item.variacaoAtiva]));
     const info = el('div', 'cartao-historico-info');
     const data = new Date(item.criadaEm);
     info.appendChild(el('div', null,
@@ -828,11 +1124,13 @@ function montarHistorico() {
 const Editor = {
   idEmEdicao: null,   // null = modelo novo
   slots: [],          // metadados dos campos detectados no HTML
+  imagens: [],        // referências (dataURL) para a replicação por IA
 };
 
 function abrirEditor(modelo) {
   Editor.idEmEdicao = modelo ? modelo.id : null;
   Editor.slots = modelo ? modelo.slots.map((s) => ({ ...s })) : [];
+  Editor.imagens = [];
   $('#editor-titulo').textContent = modelo ? 'Editar: ' + modelo.nome : 'Novo modelo';
   $('#editor-nome').value = modelo ? modelo.nome : '';
   $('#editor-fase').value = modelo ? String(modelo.fase) : '0';
@@ -842,9 +1140,31 @@ function abrirEditor(modelo) {
   $('#editor-observacoes').value = '';
   $('#editor-status').textContent = '';
   $('#botao-editor-excluir').hidden = !modelo;
+  montarMiniaturasReferencia();
   sincronizarSlotsEditor();
   mostrarTela('editor');
   pintarPreviaEditor();
+}
+
+function montarMiniaturasReferencia() {
+  const caixa = $('#editor-imagens-previa');
+  caixa.innerHTML = '';
+  Editor.imagens.forEach((dataUrl, indice) => {
+    const item = el('span', 'ref-item');
+    const img = el('img', 'ref-miniatura');
+    img.src = dataUrl;
+    img.alt = 'Referência ' + (indice + 1);
+    const remover = el('button', 'ref-remover', '×');
+    remover.type = 'button';
+    remover.title = 'Remover esta referência';
+    remover.addEventListener('click', () => {
+      Editor.imagens.splice(indice, 1);
+      montarMiniaturasReferencia();
+    });
+    item.appendChild(img);
+    item.appendChild(remover);
+    caixa.appendChild(item);
+  });
 }
 
 // mantém a lista de campos alinhada aos marcadores {{...}} do HTML,
@@ -961,21 +1281,22 @@ function pintarPreviaEditorDebounce() {
 }
 
 async function replicarComIA() {
-  const arquivo = $('#editor-imagem').files && $('#editor-imagem').files[0];
-  if (!arquivo) { avisar('Escolha a imagem do modelo que você quer replicar.', true); return; }
+  if (!Editor.imagens.length) {
+    avisar('Adicione ao menos uma imagem do modelo que você quer replicar.', true);
+    return;
+  }
   const botao = $('#botao-replicar');
   const status = $('#editor-status');
   botao.disabled = true;
   status.textContent = 'A IA está redesenhando seu modelo… isso leva até 1 minuto.';
   try {
-    const imagem = await redimensionarImagem(arquivo, 1500);
     const resposta = await fetch('api/replicar', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         designer: Estado.designer.nome,
         pin: Estado.pin,
-        imagem,
+        imagens: Editor.imagens,
         observacoes: $('#editor-observacoes').value.trim(),
       }),
     });
@@ -1071,11 +1392,124 @@ async function excluirModeloEditor() {
   mostrarTela('modelos');
 }
 
+/* ================== EQUIPE (ADMINISTRAÇÃO) ================== */
+
+async function pedirAoServidor(rota, corpo) {
+  const resposta = await fetch(rota, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ designer: Estado.designer.nome, pin: Estado.pin, ...corpo }),
+  });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) {
+    const erro = new Error(dados.erro || ('HTTP ' + resposta.status));
+    erro.semKV = !!dados.semKV;
+    throw erro;
+  }
+  return dados;
+}
+
+function montarTabelaAcessos(equipe) {
+  const caixa = $('#equipe-lista');
+  caixa.innerHTML = '';
+  for (const membro of equipe) {
+    const linha = el('div', 'linha-membro');
+    linha.appendChild(el('strong', null, esc(membro.nome)));
+    linha.appendChild(el('span', 'membro-pin', 'código: ' + esc(membro.pin)));
+    linha.appendChild(el('span', 'membro-papel' + (membro.admin ? ' admin' : ''),
+      membro.admin ? 'administrador' : 'designer'));
+    const remover = el('button', 'botao botao-fantasma botao-mini', 'Remover');
+    remover.type = 'button';
+    remover.disabled = membro.nome === Estado.designer.nome;
+    remover.title = remover.disabled ? 'Você não pode remover a si mesma' : '';
+    remover.addEventListener('click', async () => {
+      if (!window.confirm('Remover o acesso de ' + membro.nome + '?')) return;
+      try {
+        const dados = await pedirAoServidor('api/equipe', { acao: 'excluir', nome: membro.nome });
+        montarTabelaAcessos(dados.equipe);
+        avisar('Acesso de ' + membro.nome + ' removido.');
+      } catch (erro) {
+        avisar('Não removeu: ' + erro.message, true);
+      }
+    });
+    linha.appendChild(remover);
+    caixa.appendChild(linha);
+  }
+}
+
+function montarTabelaProdutividade(linhas) {
+  const caixa = $('#equipe-produtividade');
+  caixa.innerHTML = '';
+  if (!linhas.length) {
+    caixa.appendChild(el('p', 'historico-vazio', 'Sem produção registrada ainda.'));
+    return;
+  }
+  const tabela = el('div', 'tabela-produtividade');
+  tabela.appendChild(el('div', 'linha-prod cabecalho',
+    '<span>Designer</span><span>7d · Artes</span><span>7d · IA</span><span>7d · PNGs</span>' +
+    '<span>30d · Artes</span><span>30d · IA</span><span>30d · PNGs</span>'));
+  for (const linha of linhas) {
+    tabela.appendChild(el('div', 'linha-prod',
+      `<strong>${esc(linha.nome)}</strong>` +
+      `<span>${linha.d7.arte}</span><span>${linha.d7.geracao}</span><span>${linha.d7.exportacao}</span>` +
+      `<span>${linha.d30.arte}</span><span>${linha.d30.geracao}</span><span>${linha.d30.exportacao}</span>`));
+  }
+  caixa.appendChild(tabela);
+}
+
+async function montarTelaEquipe() {
+  if (!Estado.admin) { mostrarTela('modelos'); return; }
+  $('#equipe-aviso').hidden = true;
+  try {
+    const dados = await pedirAoServidor('api/equipe', { acao: 'listar' });
+    montarTabelaAcessos(dados.equipe || []);
+  } catch (erro) {
+    $('#equipe-lista').innerHTML = '';
+    $('#equipe-aviso').hidden = false;
+    $('#equipe-aviso').textContent = erro.semKV
+      ? 'Para gerenciar acessos pelo app, configure o KV no deploy (README).'
+      : 'A gestão de acessos funciona na versão publicada: ' + erro.message;
+  }
+  try {
+    const dados = await pedirAoServidor('api/estatisticas', {});
+    montarTabelaProdutividade(dados.linhas || []);
+  } catch (erro) {
+    $('#equipe-produtividade').innerHTML =
+      '<p class="historico-vazio">' + esc(erro.semKV
+        ? 'A produtividade precisa do KV configurado no deploy (README).'
+        : 'Produtividade disponível na versão publicada: ' + erro.message) + '</p>';
+  }
+}
+
+function iniciarEquipe() {
+  $('#botao-membro-salvar').addEventListener('click', async () => {
+    const nome = $('#membro-nome').value.trim();
+    const pin = $('#membro-pin').value.trim();
+    if (!nome || !pin) { avisar('Preencha nome e código.', true); return; }
+    try {
+      const dados = await pedirAoServidor('api/equipe', {
+        acao: 'salvar',
+        membro: { nome, pin, admin: $('#membro-admin').checked },
+      });
+      montarTabelaAcessos(dados.equipe);
+      $('#membro-nome').value = '';
+      $('#membro-pin').value = '';
+      $('#membro-admin').checked = false;
+      avisar('Acesso de ' + nome + ' salvo.');
+    } catch (erro) {
+      avisar('Não salvou: ' + erro.message, true);
+    }
+  });
+}
+
 /* ================== INICIALIZAÇÃO ================== */
 
 function iniciar() {
+  Modelos.usarEmbutidos = CONFIG.MODELOS_EXEMPLO;
   carregarMarcas();
   iniciarMarcas();
+  iniciarEdicaoVisual();
+  iniciarEquipe();
   iniciarLogin();
 
   for (const botao of document.querySelectorAll('.passo')) {
@@ -1112,6 +1546,18 @@ function iniciar() {
   $('#botao-baixar-todas').addEventListener('click', baixarTodas);
 
   // editor de modelos próprios
+  $('#editor-imagem').addEventListener('change', async (evento) => {
+    const arquivos = [...(evento.target.files || [])].slice(0, 4 - Editor.imagens.length);
+    for (const arquivo of arquivos) {
+      try {
+        Editor.imagens.push(await redimensionarImagem(arquivo, 1500));
+      } catch (_) {
+        avisar('Não consegui ler uma das imagens.', true);
+      }
+    }
+    evento.target.value = '';
+    montarMiniaturasReferencia();
+  });
   $('#editor-html').addEventListener('input', () => { sincronizarSlotsEditor(); pintarPreviaEditorDebounce(); });
   $('#botao-replicar').addEventListener('click', replicarComIA);
   $('#botao-editor-salvar').addEventListener('click', salvarModeloEditor);

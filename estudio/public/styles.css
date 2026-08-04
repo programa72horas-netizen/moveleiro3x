@@ -1,14 +1,17 @@
-/* Estúdio 72h · Interface (tema escuro de estúdio) */
+/* Estúdio 72h · Interface
+ * Identidade visual: Academia das Redes Sociais
+ * (magenta #9d095e · amarelo #fdd90d · branco · tipografia Poppins) */
 
 :root {
-  --fundo: #0E0E12;
-  --fundo-2: #15151B;
-  --fundo-3: #1C1C24;
-  --borda: #262630;
-  --texto: #F2F2F6;
-  --texto-2: #A6A6B4;
-  --acento: #E3242B;
-  --acento-2: #FFC400;
+  --fundo: #100b0f;
+  --fundo-2: #191019;
+  --fundo-3: #221623;
+  --borda: #322232;
+  --texto: #F7F2F6;
+  --texto-2: #B3A3B0;
+  --acento: #9d095e;
+  --acento-vivo: #C40E77;
+  --acento-2: #fdd90d;
   --ok: #2FBF71;
   --raio: 14px;
 }
@@ -22,9 +25,11 @@ html, body {
   margin: 0;
   background: var(--fundo);
   color: var(--texto);
-  font-family: 'Montserrat', 'Segoe UI', Arial, sans-serif;
+  font-family: 'Poppins', 'Segoe UI', Arial, sans-serif;
   font-size: 16px;
 }
+
+h1, h2, h3 { font-weight: 800; letter-spacing: 0.01em; }
 
 main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 80px; }
 
@@ -42,16 +47,16 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
   backdrop-filter: blur(8px);
 }
 
-.topo-marca { display: flex; align-items: center; gap: 12px; font-size: 18px; letter-spacing: 0.02em; }
+.topo-marca { display: flex; align-items: center; gap: 12px; font-size: 18px; letter-spacing: 0.02em; font-weight: 700; }
 
-.topo-selo {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 42px; height: 42px; border-radius: 12px;
-  background: linear-gradient(145deg, var(--acento), #8f1216);
-  color: #fff; font-weight: 900; font-size: 15px; font-style: italic;
-  box-shadow: 0 6px 18px rgba(227, 36, 43, 0.35);
+.logo-ars-icone { width: 42px; height: 42px; filter: drop-shadow(0 6px 16px rgba(157, 9, 94, 0.45)); }
+.logo-ars-icone.grande { width: 76px; height: 76px; }
+
+.logo-ars { display: inline-flex; align-items: center; gap: 14px; }
+.logo-ars-nome {
+  font-family: 'Poppins', sans-serif; font-weight: 800; font-size: 15px;
+  line-height: 1.2; letter-spacing: 0.02em; text-align: left; color: var(--texto);
 }
-.topo-selo.grande { width: 74px; height: 74px; border-radius: 20px; font-size: 26px; }
 
 .passos { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -85,8 +90,8 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 .botao:disabled { opacity: 0.55; cursor: wait; }
 
 .botao-primario {
-  background: linear-gradient(145deg, var(--acento), #a3161c);
-  color: #fff; box-shadow: 0 8px 24px rgba(227, 36, 43, 0.3);
+  background: linear-gradient(145deg, var(--acento-vivo), var(--acento));
+  color: #fff; box-shadow: 0 8px 24px rgba(157, 9, 94, 0.4);
 }
 .botao-primario:not(:disabled):hover { filter: brightness(1.1); }
 
@@ -221,6 +226,80 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 #campos-slots .contador.estouro { color: #ff6b71; font-weight: 700; }
 
 .painel-rodape { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+/* ---------- ajuste fino da arte (tudo editável) ---------- */
+
+.ajuste-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.ajuste-dica { margin: 0; color: var(--texto-2); font-size: 13px; }
+
+.ajuste-barra {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--fundo-2); border: 1px solid var(--acento-2);
+  border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;
+}
+.ajuste-rotulo { font-size: 13px; color: var(--texto-2); margin-right: 4px; }
+.ajuste-rotulo strong { color: var(--acento-2); font-weight: 700; }
+.ajuste-grupo { display: inline-flex; border: 1px solid var(--borda); border-radius: 9px; overflow: hidden; }
+.ajuste-grupo button, .ajuste-acao {
+  background: var(--fundo-3); border: none; color: var(--texto);
+  padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.ajuste-grupo button + button { border-left: 1px solid var(--borda); }
+.ajuste-acao { border: 1px solid var(--borda); border-radius: 9px; }
+.ajuste-grupo button:hover, .ajuste-acao:hover { background: #2C1C2E; }
+.ajuste-barra input[type='color'] {
+  width: 40px; height: 34px; padding: 2px; border: 1px solid var(--borda);
+  border-radius: 9px; background: var(--fundo-3); cursor: pointer;
+}
+
+.palco .e72-selecionado {
+  outline: 4px dashed var(--acento-2); outline-offset: 3px; cursor: move;
+}
+.palco [data-eid]:not([data-eid='0']):hover { outline: 2px dotted rgba(253, 217, 13, 0.55); }
+
+/* ---------- referências da replicação ---------- */
+
+.ref-lista { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.ref-item { position: relative; display: inline-block; }
+.ref-miniatura {
+  width: 84px; height: 84px; object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--borda); display: block;
+}
+.ref-remover {
+  position: absolute; top: -8px; right: -8px; width: 24px; height: 24px;
+  border-radius: 50%; border: none; background: var(--acento); color: #fff;
+  font-weight: 800; cursor: pointer; line-height: 1;
+}
+
+/* ---------- equipe / produtividade ---------- */
+
+.linha-membro {
+  display: flex; align-items: center; gap: 14px; padding: 10px 0;
+  border-bottom: 1px solid var(--borda); flex-wrap: wrap;
+}
+.linha-membro:last-child { border-bottom: none; }
+.linha-membro strong { min-width: 140px; }
+.membro-pin { color: var(--texto-2); font-size: 13.5px; }
+.membro-papel {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--texto-2); border: 1px solid var(--borda); border-radius: 999px; padding: 4px 12px;
+}
+.membro-papel.admin { color: var(--acento-2); border-color: rgba(253, 217, 13, 0.5); }
+.linha-membro .botao { margin-left: auto; }
+
+.tabela-produtividade { display: grid; gap: 2px; }
+.linha-prod {
+  display: grid; grid-template-columns: 1.6fr repeat(6, 1fr); gap: 8px;
+  align-items: center; padding: 9px 10px; border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.linha-prod:nth-child(even) { background: var(--fundo-3); }
+.linha-prod span { text-align: center; }
+.linha-prod.cabecalho {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--texto-2); background: none;
+}
+.linha-prod.cabecalho span:nth-child(-n+4) { position: relative; }
 
 /* ---------- editor de modelos próprios ---------- */
 

@@ -1,17 +1,22 @@
 # Estúdio 72h · Criação de artes com IA
 
-Aplicativo web para a equipe de design criar artes do **método 72 Horas**
-(lojas de móveis de médio e baixo padrão) com qualidade e velocidade:
+Aplicativo web (identidade visual **Academia das Redes Sociais**) para a
+equipe de design criar artes do **método 72 Horas** com qualidade e
+velocidade:
 
-- **Cada designer tem seu acesso** (nome + código).
-- **Modelos de layout travados em código** (1080×1350, formato feed):
-  a IA escreve apenas os textos — o desenho nunca muda, então toda arte
-  sai idêntica ao modelo aprovado.
+- **Cada designer tem seu acesso** (nome + código), gerido pela
+  administradora na tela **Equipe** — que também mostra a
+  **produtividade** de cada um (artes, gerações de IA e PNGs, 7/30 dias).
+- **Modelos de layout travados** (1080×1350, formato feed): a IA escreve
+  apenas os textos — o desenho nunca muda, então toda arte sai idêntica
+  ao modelo aprovado. O app começa **limpo**: só os modelos que a
+  própria equipe cadastrar.
 - **Espaço de planejamento**: o designer cola o planejamento do post e a
   IA gera **3 variações de copy** seguindo à risca o que foi escrito
   (sem inventar preço, data ou condição).
-- **Edição ao vivo**: qualquer campo pode ser ajustado na mão, com a
-  arte atualizando na hora.
+- **Tudo na arte é editável**: além dos campos de texto, dá para clicar
+  em **qualquer elemento** da arte e arrastar para mover, mudar tamanho,
+  cor, escala ou ocultar — os ajustes valem para o PNG exportado.
 - **Exportação em PNG** (1080×1350) direto do navegador, com as fontes
   embutidas — pronto para postar.
 - **Marcas/clientes**: logo, cores e contato de cada loja ficam salvos e
@@ -23,11 +28,12 @@ Aplicativo web para a equipe de design criar artes do **método 72 Horas**
 Na tela **Modelo**, a seção **"Meus modelos"** tem o botão
 **"+ Adicionar um modelo meu"**. Dá para trazer um layout de 3 jeitos:
 
-1. **Replicar de uma imagem (IA)** — envie o print/arquivo de um modelo
-   que você já usa. A IA recria o layout como HTML fiel **uma única
-   vez**; você confere na prévia ao vivo, ajusta os campos e salva.
-   Depois disso o layout fica **travado**: no dia a dia a IA só escreve
-   os textos, nunca mexe no desenho.
+1. **Replicar de imagens (IA)** — envie até 4 prints/arquivos de um
+   modelo que você já usa (a 1ª imagem é a principal; as outras servem
+   de referência de detalhes). A IA recria o layout como HTML fiel
+   **uma única vez**; você confere na prévia ao vivo, ajusta os campos
+   e salva. Depois disso o layout fica **travado**: no dia a dia a IA
+   só escreve os textos, nunca mexe no desenho.
 2. **Colar HTML** — cole um layout de 1080×1350 com marcadores
    `{{titulo}}`, `{{preco}}`, `{{imgFoto}}`… Cada marcador vira um campo
    editável automaticamente. Marcadores da marca (`{{marcaNome}}`,
@@ -67,18 +73,33 @@ npx wrangler deploy         # publica em https://estudio72h.<sua-conta>.workers.
 # chave da API da Anthropic (https://console.anthropic.com)
 npx wrangler secret put ANTHROPIC_API_KEY
 
-# códigos de acesso da equipe — MESMOS nomes e códigos do CONFIG em public/app.js
+# acessos iniciais (bootstrap) — depois você gerencia tudo pela tela Equipe
 # formato: Nome:codigo,Nome 2:codigo2
 npx wrangler secret put ACCESS_CODES
-# exemplo de valor:  Deborah:7272,Designer 1:1111,Designer 2:2222,Designer 3:3333
+# exemplo de valor:  Deborah:7272,Designer 1:1111
 
-# (recomendado) armazenamento central dos SEUS modelos, para toda a equipe:
+# quem começa como administrador (vê a tela Equipe e a produtividade)
+npx wrangler secret put ADMINS
+# exemplo de valor:  Deborah
+
+# (recomendado) armazenamento central de modelos, acessos e produtividade:
 npx wrangler kv namespace create MODELOS
 # copie o id que aparecer, descomente o bloco kv_namespaces no wrangler.jsonc
 # colando o id, e rode `npx wrangler deploy` de novo
 ```
 
 Pronto. O endereço do deploy já serve o app completo.
+
+## Administração (tela Equipe)
+
+Quem estiver em `ADMINS` vê o botão **★ Equipe** no topo:
+
+- **Acessos**: adicionar/remover designers e definir códigos, direto
+  pelo app (grava no KV — o `ACCESS_CODES` vale só até a primeira
+  equipe salva por aqui). Não dá para remover o próprio acesso nem
+  deixar a equipe sem administrador.
+- **Produtividade**: artes iniciadas, gerações de texto com IA e PNGs
+  exportados por designer, nos últimos 7 e 30 dias.
 
 ### Trocar o modelo de IA (opcional)
 

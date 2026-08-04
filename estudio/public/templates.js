@@ -650,7 +650,10 @@ function compilarPersonalizado(def) {
 const Modelos = {
   embutidos: MODELOS,
   personalizados: PERSONALIZADOS,
-  get lista() { return [...MODELOS, ...PERSONALIZADOS]; },
+  // o app de produção esconde os modelos de exemplo (usarEmbutidos = false);
+  // a galeria e a demonstração os mantêm visíveis
+  usarEmbutidos: true,
+  get lista() { return [...(Modelos.usarEmbutidos ? MODELOS : []), ...PERSONALIZADOS]; },
   css: ARTE_CSS,
   porId(id) {
     return MODELOS.find((m) => m.id === id) || PERSONALIZADOS.find((m) => m.id === id) || null;

@@ -7,12 +7,15 @@
  *
  * Segredos/variáveis (veja o README):
  *   ANTHROPIC_API_KEY  (obrigatório, via `wrangler secret put`)
- *   ACCESS_CODES       (obrigatório: "Nome:pin,Nome 2:pin2" — deve
- *                       bater com CONFIG.DESIGNERS do app.js)
+ *   ACCESS_CODES       (bootstrap da equipe: "Nome:pin,Nome 2:pin2" —
+ *                       vale até a equipe ser salva pela tela de admin)
+ *   ADMINS             (nomes com papel de administrador no bootstrap,
+ *                       ex.: "Deborah")
  *   MODEL              (opcional; padrão claude-sonnet-5)
- *   MODELOS            (opcional: KV namespace para os modelos criados
- *                       pela equipe valerem para todos os aparelhos;
- *                       sem ele, cada navegador guarda os seus)
+ *   MODELOS            (opcional: KV namespace usado para modelos da
+ *                       equipe, acessos e produtividade; sem ele, cada
+ *                       navegador guarda os próprios modelos e a tela
+ *                       de equipe fica indisponível)
  */
 
 'use strict';
@@ -44,12 +47,39 @@ function resposta(json, status = 200) {
   });
 }
 
-function acessoValido(env, designer, pin) {
-  const codigos = String(env.ACCESS_CODES || '')
-    .split(',')
-    .map((par) => par.trim())
-    .filter(Boolean);
-  return codigos.includes(designer + ':' + pin);
+/* ---------- equipe e acesso ----------
+ * A equipe mora no KV (gerida pela tela de administração). Sem KV — ou
+ * enquanto ninguém salvou a equipe por lá — vale o ACCESS_CODES do env,
+ * com os nomes listados em ADMINS como administradores. */
+
+function equipeDoEnv(env) {
+  const admins = String(env.ADMINS || '').split(',').map((n) => n.trim()).filter(Boolean);
+  return String(env.ACCESS_CODES || '').split(',').map((par) => {
+    const separador = par.lastIndexOf(':');
+    if (separador < 1) return null;
+    const nome = par.slice(0, separador).trim();
+    const pin = par.slice(separador + 1).trim();
+    return nome && pin ? { nome, pin, admin: admins.includes(nome) } : null;
+  }).filter(Boolean);
+}
+
+async function equipeAtual(env) {
+  if (env.MODELOS) {
+    try {
+      const bruto = await env.MODELOS.get('equipe');
+      if (bruto) {
+        const lista = JSON.parse(bruto);
+        if (Array.isArray(lista) && lista.length) return lista;
+      }
+    } catch (_) { /* cai para o env */ }
+  }
+  return equipeDoEnv(env);
+}
+
+async function membroValido(env, nome, pin) {
+  if (!nome || !pin) return null;
+  const equipe = await equipeAtual(env);
+  return equipe.find((m) => m.nome === nome && m.pin === pin) || null;
 }
 
 // schema do JSON que o Claude é obrigado a devolver (3 variações,
@@ -141,7 +171,7 @@ async function gerar(pedido, env) {
   if (!designer || !pin || !modelo || !Array.isArray(modelo.slots) || !modelo.slots.length || !plano) {
     return resposta({ erro: 'Pedido incompleto.' }, 400);
   }
-  if (!acessoValido(env, designer, pin)) {
+  if (!(await membroValido(env, designer, pin))) {
     return resposta({ erro: 'Acesso não autorizado. Confira seu código com a coordenação.' }, 401);
   }
 
@@ -232,7 +262,7 @@ async function tratarModelos(pedido, env) {
   }
   let corpo;
   try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
-  if (!acessoValido(env, corpo.designer, corpo.pin)) {
+  if (!(await membroValido(env, corpo.designer, corpo.pin))) {
     return resposta({ erro: 'Acesso não autorizado.' }, 401);
   }
   if (!env.MODELOS) {
@@ -273,7 +303,124 @@ async function tratarModelos(pedido, env) {
   return resposta({ ok: true, modelos: semEle });
 }
 
-/* ---------- replicar um layout a partir de uma imagem ---------- */
+/* ---------- login, equipe e produtividade ---------- */
+
+async function entrar(pedido, env) {
+  let corpo;
+  try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
+  const membro = await membroValido(env, corpo.nome, corpo.pin);
+  if (!membro) return resposta({ erro: 'Nome ou código incorretos.' }, 401);
+  return resposta({ ok: true, nome: membro.nome, admin: !!membro.admin });
+}
+
+async function tratarEquipe(pedido, env) {
+  if (pedido.method === 'GET') {
+    // apenas os nomes, para montar a tela de login
+    const equipe = await equipeAtual(env);
+    return resposta({ nomes: equipe.map((m) => m.nome) });
+  }
+  if (pedido.method !== 'POST') return resposta({ erro: 'Método não suportado.' }, 405);
+  let corpo;
+  try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
+  const chamador = await membroValido(env, corpo.designer, corpo.pin);
+  if (!chamador || !chamador.admin) {
+    return resposta({ erro: 'Somente administradores gerenciam a equipe.' }, 403);
+  }
+
+  const equipe = await equipeAtual(env);
+  if (corpo.acao === 'listar') return resposta({ equipe });
+
+  if (!env.MODELOS) {
+    return resposta({ erro: 'Para gerenciar a equipe pelo app, configure o KV (README).', semKV: true }, 501);
+  }
+  let nova = equipe;
+  if (corpo.acao === 'salvar') {
+    const membro = corpo.membro || {};
+    const nome = String(membro.nome || '').trim().slice(0, 40);
+    const pin = String(membro.pin || '').trim().slice(0, 12);
+    if (!nome || !/^[0-9]{4,12}$/.test(pin)) {
+      return resposta({ erro: 'Informe um nome e um código numérico de 4 a 12 dígitos.' }, 400);
+    }
+    nova = equipe.filter((m) => m.nome !== nome);
+    if (nova.length >= 40) return resposta({ erro: 'Limite de 40 pessoas na equipe.' }, 400);
+    nova.push({ nome, pin, admin: !!membro.admin });
+  } else if (corpo.acao === 'excluir') {
+    nova = equipe.filter((m) => m.nome !== corpo.nome);
+    if (!nova.some((m) => m.admin)) {
+      return resposta({ erro: 'A equipe precisa manter ao menos um administrador.' }, 400);
+    }
+  } else {
+    return resposta({ erro: 'Ação desconhecida.' }, 400);
+  }
+  await env.MODELOS.put('equipe', JSON.stringify(nova));
+  return resposta({ equipe: nova });
+}
+
+// contadores diários por designer: stats:<nome>:<AAAA-MM-DD>
+async function registrarEvento(pedido, env) {
+  let corpo;
+  try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
+  const membro = await membroValido(env, corpo.designer, corpo.pin);
+  if (!membro) return resposta({ erro: 'Acesso não autorizado.' }, 401);
+  if (!env.MODELOS) return resposta({ ok: false, semKV: true });
+  const tipo = ['geracao', 'exportacao', 'arte'].includes(corpo.tipo) ? corpo.tipo : null;
+  if (!tipo) return resposta({ erro: 'Tipo de evento desconhecido.' }, 400);
+  const quantidade = Math.max(1, Math.min(20, Number(corpo.quantidade) || 1));
+  const dia = new Date().toISOString().slice(0, 10);
+  const chave = `stats:${membro.nome}:${dia}`;
+  let contadores = {};
+  try { contadores = JSON.parse(await env.MODELOS.get(chave)) || {}; } catch (_) { contadores = {}; }
+  contadores[tipo] = (contadores[tipo] || 0) + quantidade;
+  // expira sozinho depois de ~90 dias para o KV não acumular para sempre
+  await env.MODELOS.put(chave, JSON.stringify(contadores), { expirationTtl: 60 * 60 * 24 * 90 });
+  return resposta({ ok: true });
+}
+
+async function estatisticas(pedido, env) {
+  let corpo;
+  try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
+  const chamador = await membroValido(env, corpo.designer, corpo.pin);
+  if (!chamador || !chamador.admin) {
+    return resposta({ erro: 'Somente administradores veem a produtividade.' }, 403);
+  }
+  if (!env.MODELOS) {
+    return resposta({ erro: 'A produtividade precisa do KV configurado (README).', semKV: true }, 501);
+  }
+  const corte7 = Date.now() - 7 * 86400000;
+  const corte30 = Date.now() - 30 * 86400000;
+  const porDesigner = {};
+  let cursor;
+  do {
+    const pagina = await env.MODELOS.list({ prefix: 'stats:', cursor });
+    for (const chaveInfo of pagina.keys) {
+      const partes = chaveInfo.name.split(':'); // stats:<nome>:<dia>
+      if (partes.length < 3) continue;
+      const dia = partes[partes.length - 1];
+      const nome = partes.slice(1, -1).join(':');
+      const quando = Date.parse(dia + 'T12:00:00Z');
+      if (!(quando >= corte30)) continue;
+      let contadores = {};
+      try { contadores = JSON.parse(await env.MODELOS.get(chaveInfo.name)) || {}; } catch (_) { continue; }
+      const alvo = porDesigner[nome] = porDesigner[nome] ||
+        { nome, d7: { geracao: 0, exportacao: 0, arte: 0 }, d30: { geracao: 0, exportacao: 0, arte: 0 } };
+      for (const tipo of ['geracao', 'exportacao', 'arte']) {
+        const valor = contadores[tipo] || 0;
+        alvo.d30[tipo] += valor;
+        if (quando >= corte7) alvo.d7[tipo] += valor;
+      }
+    }
+    cursor = pagina.list_complete ? null : pagina.cursor;
+  } while (cursor);
+  const equipe = await equipeAtual(env);
+  // toda a equipe aparece, mesmo quem ainda não produziu nada
+  for (const membro of equipe) {
+    porDesigner[membro.nome] = porDesigner[membro.nome] ||
+      { nome: membro.nome, d7: { geracao: 0, exportacao: 0, arte: 0 }, d30: { geracao: 0, exportacao: 0, arte: 0 } };
+  }
+  return resposta({ linhas: Object.values(porDesigner).sort((a, b) => b.d30.geracao - a.d30.geracao) });
+}
+
+/* ---------- replicar um layout a partir de imagens ---------- */
 
 async function replicar(pedido, env) {
   if (!env.ANTHROPIC_API_KEY) {
@@ -281,12 +428,18 @@ async function replicar(pedido, env) {
   }
   let corpo;
   try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
-  if (!acessoValido(env, corpo.designer, corpo.pin)) {
+  if (!(await membroValido(env, corpo.designer, corpo.pin))) {
     return resposta({ erro: 'Acesso não autorizado.' }, 401);
   }
-  const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(corpo.imagem || '');
-  if (!m) return resposta({ erro: 'Envie a imagem do modelo (PNG, JPG ou WebP).' }, 400);
-  if (m[2].length > 7000000) return resposta({ erro: 'Imagem grande demais (máx. ~5 MB).' }, 400);
+  const brutas = Array.isArray(corpo.imagens) ? corpo.imagens : (corpo.imagem ? [corpo.imagem] : []);
+  const imagens = [];
+  for (const bruta of brutas.slice(0, 4)) {
+    const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(bruta || '');
+    if (!m) return resposta({ erro: 'Envie as imagens do modelo em PNG, JPG ou WebP.' }, 400);
+    if (m[2].length > 7000000) return resposta({ erro: 'Uma das imagens é grande demais (máx. ~5 MB).' }, 400);
+    imagens.push(m);
+  }
+  if (!imagens.length) return resposta({ erro: 'Envie ao menos uma imagem do modelo.' }, 400);
 
   const sistema = `Você é um especialista em recriar layouts de artes de Instagram como
 HTML/CSS pixel a pixel. Você recebe a imagem de uma arte de referência e a recria
@@ -316,10 +469,15 @@ REGRAS OBRIGATÓRIAS:
    (texto/imagem), multilinha e o texto de exemplo vindo da referência.`;
 
   const conteudo = [
-    { type: 'image', source: { type: 'base64', media_type: 'image/' + m[1], data: m[2] } },
+    ...imagens.map((m) => ({
+      type: 'image', source: { type: 'base64', media_type: 'image/' + m[1], data: m[2] },
+    })),
     {
       type: 'text',
-      text: 'Recrie esta arte como modelo reutilizável seguindo as regras.' +
+      text: (imagens.length > 1
+        ? 'Recrie a arte da PRIMEIRA imagem como modelo reutilizável; use as demais imagens ' +
+          'como referência extra de detalhes, variações e elementos da mesma identidade.'
+        : 'Recrie esta arte como modelo reutilizável seguindo as regras.') +
         (corpo.observacoes ? '\nObservações da equipe: ' + String(corpo.observacoes).slice(0, 500) : ''),
     },
   ];
@@ -390,10 +548,16 @@ REGRAS OBRIGATÓRIAS:
 export default {
   async fetch(pedido, env) {
     const url = new URL(pedido.url);
+    const soPost = (tratador) => () =>
+      (pedido.method === 'POST' ? tratador(pedido, env) : resposta({ erro: 'Use POST.' }, 405));
     const rotas = {
-      '/api/gerar': () => (pedido.method === 'POST' ? gerar(pedido, env) : resposta({ erro: 'Use POST.' }, 405)),
+      '/api/gerar': soPost(gerar),
       '/api/modelos': () => tratarModelos(pedido, env),
-      '/api/replicar': () => (pedido.method === 'POST' ? replicar(pedido, env) : resposta({ erro: 'Use POST.' }, 405)),
+      '/api/replicar': soPost(replicar),
+      '/api/entrar': soPost(entrar),
+      '/api/equipe': () => tratarEquipe(pedido, env),
+      '/api/eventos': soPost(registrarEvento),
+      '/api/estatisticas': soPost(estatisticas),
     };
     const rota = rotas[url.pathname];
     if (rota) {
