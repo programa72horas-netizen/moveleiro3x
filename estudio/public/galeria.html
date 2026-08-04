@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Estúdio 72h · Galeria de modelos</title>
+  <link rel="stylesheet" href="fonts.css"/>
+  <style>
+    body { margin: 0; background: #0E0E12; color: #F2F2F6;
+      font-family: 'Montserrat', Arial, sans-serif; padding: 30px; }
+    h1 { margin: 0 0 6px; }
+    p.sub { color: #A6A6B4; margin: 0 0 30px; }
+    .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 26px; }
+    figure { margin: 0; }
+    figcaption { padding: 10px 2px; font-weight: 600; }
+    figcaption small { color: #A6A6B4; font-weight: 400; display: block; }
+    .quadro { width: 100%; aspect-ratio: 1080 / 1350; position: relative; overflow: hidden;
+      border-radius: 12px; border: 1px solid #262630; background: #000; }
+    .quadro .escala { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  </style>
+</head>
+<body>
+  <h1>Galeria de modelos</h1>
+  <p class="sub">Todos os layouts do Estúdio 72h preenchidos com textos de exemplo.</p>
+  <div class="galeria" id="galeria"></div>
+
+  <script src="templates.js"></script>
+  <script>
+    const galeria = document.getElementById('galeria');
+    const marca = {
+      nome: 'Lar Móveis', corPrimaria: '#E3242B', corSecundaria: '#FFC400',
+      logo: null, whatsapp: '(48) 99999-9999', endereco: 'Av. Central, 1200 · Centro',
+    };
+    for (const modelo of Modelos.lista) {
+      const figura = document.createElement('figure');
+      figura.dataset.modelo = modelo.id;
+      const quadro = document.createElement('div');
+      quadro.className = 'quadro';
+      const escala = document.createElement('div');
+      escala.className = 'escala';
+      escala.innerHTML = '<style>' + Modelos.css + '</style>' +
+        modelo.render(Modelos.exemplos(modelo), marca);
+      quadro.appendChild(escala);
+      figura.appendChild(quadro);
+      const legenda = document.createElement('figcaption');
+      legenda.innerHTML = modelo.nome + '<small>Fase ' + modelo.fase + ' · ' + modelo.resumo + '</small>';
+      figura.appendChild(legenda);
+      galeria.appendChild(figura);
+      requestAnimationFrame(() => {
+        escala.style.transform = 'scale(' + quadro.clientWidth / 1080 + ')';
+      });
+    }
+    window.addEventListener('resize', () => {
+      document.querySelectorAll('.quadro').forEach((q) => {
+        q.querySelector('.escala').style.transform = 'scale(' + q.clientWidth / 1080 + ')';
+      });
+    });
+  </script>
+</body>
+</html>

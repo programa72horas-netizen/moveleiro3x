@@ -1,0 +1,13 @@
+// Estúdio 72h · Configuração da Cloudflare (Workers + assets estáticos)
+// Deploy: dentro desta pasta, rode `wrangler deploy` (veja o README).
+{
+  "name": "estudio72h",
+  "main": "worker.js",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  }
+  // A chave da IA NÃO fica aqui: rode `wrangler secret put ANTHROPIC_API_KEY`
+  // e `wrangler secret put ACCESS_CODES` após o primeiro deploy.
+}

@@ -1,0 +1,106 @@
+# Estúdio 72h · Criação de artes com IA
+
+Aplicativo web para a equipe de design criar artes do **método 72 Horas**
+(lojas de móveis de médio e baixo padrão) com qualidade e velocidade:
+
+- **Cada designer tem seu acesso** (nome + código).
+- **Modelos de layout travados em código** (1080×1350, formato feed):
+  a IA escreve apenas os textos — o desenho nunca muda, então toda arte
+  sai idêntica ao modelo aprovado.
+- **Espaço de planejamento**: o designer cola o planejamento do post e a
+  IA gera **3 variações de copy** seguindo à risca o que foi escrito
+  (sem inventar preço, data ou condição).
+- **Edição ao vivo**: qualquer campo pode ser ajustado na mão, com a
+  arte atualizando na hora.
+- **Exportação em PNG** (1080×1350) direto do navegador, com as fontes
+  embutidas — pronto para postar.
+- **Marcas/clientes**: logo, cores e contato de cada loja ficam salvos e
+  entram automaticamente em todos os modelos.
+- **Histórico** por designer, para reabrir e ajustar artes já feitas.
+
+## As 3 fases do método
+
+| Fase | Modelos | Estilo |
+|---|---|---|
+| **1 · Curiosidade** | Comunicado Oficial · Acesso Restrito | Preto institucional, mistério, carimbo confidencial |
+| **2 · Oferta** | Oferta com Produto · Oferta Percentual | Gradiente da marca, produto herói, preço gigante |
+| **3 · Urgência** | Comando Gigante · Escassez de Estoque | Alerta, comandos curtos, prazo e estoque no fim |
+
+Veja todos os modelos preenchidos em `galeria.html` (ex.:
+`https://SEU-APP.workers.dev/galeria.html`).
+
+## Como publicar (Cloudflare Workers)
+
+O app roda inteiro na Cloudflare: os arquivos estáticos ficam em
+`public/` e o `worker.js` expõe a rota `POST /api/gerar`, que chama a IA
+(Claude) usando uma chave que **nunca aparece no navegador**.
+
+```bash
+cd estudio
+npx wrangler login          # primeira vez
+npx wrangler deploy         # publica em https://estudio72h.<sua-conta>.workers.dev
+
+# chave da API da Anthropic (https://console.anthropic.com)
+npx wrangler secret put ANTHROPIC_API_KEY
+
+# códigos de acesso da equipe — MESMOS nomes e códigos do CONFIG em public/app.js
+# formato: Nome:codigo,Nome 2:codigo2
+npx wrangler secret put ACCESS_CODES
+# exemplo de valor:  Deborah:7272,Designer 1:1111,Designer 2:2222,Designer 3:3333
+```
+
+Pronto. O endereço do deploy já serve o app completo.
+
+### Trocar o modelo de IA (opcional)
+
+Por padrão o worker usa `claude-sonnet-5` (rápido e forte para copy).
+Para trocar, defina a variável `MODEL` no `wrangler.jsonc` ou no painel
+da Cloudflare (ex.: `claude-haiku-4-5-20251001` para custo mínimo).
+
+## Como adicionar ou remover designers
+
+1. Edite `CONFIG.DESIGNERS` no início de `public/app.js` (nome + código).
+2. Atualize o segredo com os mesmos pares:
+   `npx wrangler secret put ACCESS_CODES`
+3. Publique de novo: `npx wrangler deploy`.
+
+> O código do designer libera o app e também é validado no servidor a
+> cada geração de IA. É uma proteção adequada para equipe interna — não
+> use esses códigos para proteger dados sensíveis.
+
+## Como criar um modelo novo de layout
+
+Os modelos vivem em `public/templates.js`. Cada um tem:
+
+- `id`, `fase`, `nome`, `resumo`;
+- `slots`: os campos que o designer/IA preenchem (com limite de
+  caracteres, exemplo e tipo `texto` ou `imagem`);
+- `render(slots, marca)`: o HTML/CSS fixo da arte (1080×1350).
+
+Copie um modelo existente, ajuste e pronto: ele aparece sozinho na
+grade do app, na galeria e no fluxo da IA. Confira o resultado em
+`galeria.html` antes de liberar para a equipe.
+
+## Estrutura
+
+| Arquivo | Função |
+|---|---|
+| `public/index.html` | Telas do app (login, modelos, planejamento, estúdio, histórico) |
+| `public/styles.css` | Interface (tema escuro de estúdio) |
+| `public/app.js` | Fluxo do app + `CONFIG.DESIGNERS` |
+| `public/templates.js` | **Os modelos de layout** (o coração do sistema) |
+| `public/export.js` | Exportação PNG 1080×1350 com fontes embutidas |
+| `public/galeria.html` | Catálogo de todos os modelos preenchidos |
+| `public/fonts/` + `fonts.css` | Montserrat e Poppins locais (licença SIL OFL) |
+| `worker.js` | API `/api/gerar` (chama o Claude com schema fixo) |
+| `wrangler.jsonc` | Configuração do deploy na Cloudflare |
+
+## Por que a qualidade não varia mais
+
+No fluxo antigo, a IA desenhava a arte inteira a cada pedido — cada
+resposta saía de um jeito. Aqui o desenho é **código**: posição, cores,
+tipografia e hierarquia são fixos por modelo. A IA recebe um schema
+com os campos e limites de caracteres e é obrigada a responder só com
+os textos, seguindo o guia de tom da fase (curiosidade, oferta ou
+urgência) e o planejamento do designer. Se a IA estiver fora do ar, o
+designer preenche os mesmos campos na mão — o layout continua perfeito.

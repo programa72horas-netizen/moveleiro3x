@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Estúdio 72h · Criação de artes</title>
+  <meta name="description" content="Estúdio de criação de artes do método 72 Horas: modelos fixos, planejamento e IA."/>
+  <link rel="stylesheet" href="fonts.css"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<header class="topo" id="topo" hidden>
+  <div class="topo-marca">
+    <span class="topo-selo">72h</span>
+    <strong>Estúdio 72h</strong>
+  </div>
+  <nav class="passos" id="passos">
+    <button class="passo" data-tela="modelos"><span>1</span> Modelo</button>
+    <button class="passo" data-tela="plano" disabled><span>2</span> Planejamento</button>
+    <button class="passo" data-tela="estudio" disabled><span>3</span> Estúdio</button>
+    <button class="passo passo-extra" data-tela="historico"><span>≡</span> Histórico</button>
+  </nav>
+  <div class="topo-usuario">
+    <span id="usuario-nome"></span>
+    <button class="botao botao-fantasma" id="botao-sair" type="button">Sair</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== LOGIN ===================== -->
+  <section class="tela" id="tela-login">
+    <div class="login-cartao">
+      <div class="login-cabecalho">
+        <span class="topo-selo grande">72h</span>
+        <h1>Estúdio 72h</h1>
+        <p>Criação de artes do método 72 Horas.<br/>Escolha seu nome e digite seu código de acesso.</p>
+      </div>
+      <div class="login-designers" id="login-designers"></div>
+      <form id="form-login" autocomplete="off">
+        <label class="campo">
+          <span>Código de acesso</span>
+          <input type="password" id="login-pin" inputmode="numeric" maxlength="12"
+                 placeholder="••••" required/>
+        </label>
+        <p class="login-erro" id="login-erro" hidden>Código incorreto para este designer.</p>
+        <button class="botao botao-primario login-entrar" type="submit">Entrar no estúdio</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== PASSO 1 · MODELOS ===================== -->
+  <section class="tela" id="tela-modelos" hidden>
+    <div class="tela-cabecalho">
+      <h2>Escolha o modelo da arte</h2>
+      <p>Cada modelo é um layout travado — a IA só escreve os textos, nunca muda o desenho.</p>
+    </div>
+    <div id="grade-modelos"></div>
+  </section>
+
+  <!-- ===================== PASSO 2 · PLANEJAMENTO ===================== -->
+  <section class="tela" id="tela-plano" hidden>
+    <div class="tela-cabecalho">
+      <h2>Planejamento da arte</h2>
+      <p>Modelo escolhido: <strong id="plano-modelo-nome"></strong>.
+         Preencha o que a arte precisa comunicar — a IA segue exatamente o que estiver aqui.</p>
+    </div>
+
+    <div class="plano-grade">
+      <div class="cartao">
+        <h3>Marca / cliente</h3>
+        <div class="linha-campos">
+          <label class="campo campo-crescer">
+            <span>Cliente</span>
+            <select id="marca-selecao"></select>
+          </label>
+          <button class="botao botao-fantasma" id="botao-nova-marca" type="button">+ Nova marca</button>
+        </div>
+        <div id="marca-form" hidden>
+          <div class="linha-campos">
+            <label class="campo campo-crescer"><span>Nome da loja</span>
+              <input id="marca-nome" maxlength="40" placeholder="Ex.: Lar Móveis"/></label>
+            <label class="campo"><span>Cor principal</span>
+              <input type="color" id="marca-cor1" value="#E3242B"/></label>
+            <label class="campo"><span>Cor de apoio</span>
+              <input type="color" id="marca-cor2" value="#FFC400"/></label>
+          </div>
+          <div class="linha-campos">
+            <label class="campo campo-crescer"><span>WhatsApp</span>
+              <input id="marca-whats" maxlength="20" placeholder="(48) 99999-9999"/></label>
+            <label class="campo campo-crescer"><span>Endereço curto</span>
+              <input id="marca-endereco" maxlength="60" placeholder="Av. Central, 1200 · Centro"/></label>
+          </div>
+          <div class="linha-campos">
+            <label class="campo campo-crescer"><span>Logo (PNG com fundo transparente)</span>
+              <input type="file" id="marca-logo" accept="image/*"/></label>
+            <img id="marca-logo-previa" class="logo-previa" alt="" hidden/>
+          </div>
+          <div class="linha-campos">
+            <button class="botao botao-primario" id="botao-salvar-marca" type="button">Salvar marca</button>
+            <button class="botao botao-fantasma" id="botao-cancelar-marca" type="button">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h3>Planejamento</h3>
+        <div class="linha-campos">
+          <label class="campo campo-crescer"><span>Objetivo da arte</span>
+            <select id="plano-objetivo">
+              <option value="vender">Vender (oferta direta)</option>
+              <option value="curiosidade">Gerar curiosidade / antecipação</option>
+              <option value="urgencia">Urgência / última chamada</option>
+              <option value="autoridade">Autoridade / prova social</option>
+            </select></label>
+          <label class="campo campo-crescer"><span>Público</span>
+            <input id="plano-publico" maxlength="80"
+                   placeholder="Ex.: casais montando a primeira casa"/></label>
+        </div>
+        <div class="linha-campos">
+          <label class="campo campo-crescer"><span>Produto / oferta</span>
+            <input id="plano-oferta" maxlength="110"
+                   placeholder="Ex.: sofá retrátil 2,90m — de R$ 2.499 por R$ 1.899"/></label>
+        </div>
+        <div class="linha-campos">
+          <label class="campo campo-crescer"><span>Preço / condições</span>
+            <input id="plano-preco" maxlength="90"
+                   placeholder="Ex.: 10x de R$ 189,99 sem juros"/></label>
+          <label class="campo campo-crescer"><span>Data / prazo</span>
+            <input id="plano-prazo" maxlength="60" placeholder="Ex.: só até domingo, 20h"/></label>
+        </div>
+        <label class="campo"><span>Mensagem principal + observações (cole aqui o planejamento)</span>
+          <textarea id="plano-texto" rows="6"
+            placeholder="O que essa arte precisa dizer? Cole o planejamento completo do post: ângulo, gatilhos, frases obrigatórias, o que não pode faltar…"></textarea></label>
+      </div>
+
+      <div class="cartao" id="cartao-imagens" hidden>
+        <h3>Imagens desta arte</h3>
+        <div id="plano-imagens"></div>
+      </div>
+    </div>
+
+    <div class="plano-acoes">
+      <button class="botao botao-fantasma" id="botao-voltar-modelos" type="button">← Trocar modelo</button>
+      <button class="botao botao-secundario" id="botao-manual" type="button">Preencher textos manualmente</button>
+      <button class="botao botao-primario" id="botao-gerar" type="button">✦ Gerar 3 variações com IA</button>
+    </div>
+    <p class="plano-status" id="plano-status" hidden></p>
+  </section>
+
+  <!-- ===================== PASSO 3 · ESTÚDIO ===================== -->
+  <section class="tela" id="tela-estudio" hidden>
+    <div class="estudio-grade">
+      <div class="estudio-visual">
+        <div class="variacoes" id="variacoes"></div>
+        <div class="palco-moldura">
+          <div class="palco-caixa" id="palco-caixa">
+            <div class="palco" id="palco"></div>
+          </div>
+        </div>
+        <div class="estudio-exportar">
+          <button class="botao botao-primario" id="botao-baixar" type="button">⬇ Baixar PNG (1080×1350)</button>
+          <button class="botao botao-secundario" id="botao-baixar-todas" type="button">Baixar as 3 variações</button>
+          <span class="exportar-status" id="exportar-status"></span>
+        </div>
+      </div>
+      <aside class="estudio-painel">
+        <div class="painel-cabecalho">
+          <h3 id="estudio-modelo-nome"></h3>
+          <button class="botao botao-fantasma" id="botao-regerar" type="button">✦ Gerar de novo</button>
+        </div>
+        <p class="painel-dica">Edite qualquer campo — a arte atualiza na hora. O layout não se move.</p>
+        <div id="campos-slots"></div>
+        <div class="painel-rodape">
+          <button class="botao botao-fantasma" id="botao-voltar-plano" type="button">← Planejamento</button>
+          <button class="botao botao-secundario" id="botao-nova-arte" type="button">Nova arte</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== HISTÓRICO ===================== -->
+  <section class="tela" id="tela-historico" hidden>
+    <div class="tela-cabecalho">
+      <h2>Histórico de artes</h2>
+      <p>Suas últimas artes ficam salvas neste navegador. Reabra para ajustar ou exportar de novo.</p>
+    </div>
+    <div id="lista-historico"></div>
+  </section>
+
+</main>
+
+<div class="aviso" id="aviso" hidden></div>
+
+<script src="templates.js"></script>
+<script src="export.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
