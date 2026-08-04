@@ -18,13 +18,12 @@ const CONFIG = {
   // rode  await gerarHashPin('NovoCodigo')  — cole o resultado aqui.
   PIN_EQUIPE_HASH: '2ae48495678af6fd98c5c36afa297fc3bd32eca791711ee7ab5327ed97cc92c6',
 
-  // Funcionamento do spa
+  // Funcionamento do spa — grade fixa de horários de início
   HORARIOS: {
-    diasSemana: [1, 2, 3, 4, 5, 6],              // 0=dom, 1=seg … 6=sáb
-    semana: { primeira: '08:00', ultima: '18:30' }, // seg–sex: 08h às 19h30
-    sabado: { primeira: '08:00', ultima: '16:00' }, // sábado: 08h às 17h
-    passoMin: 30,                                 // grade de meia em meia hora
-    duracaoMin: 60,                               // duração de cada sessão
+    diasSemana: [1, 2, 3, 4, 5, 6],  // 0=dom, 1=seg … 6=sáb
+    grade: ['08:00', '09:15', '10:30', '12:00', '13:30', '14:45', '16:00', '17:15', '18:30'],
+    ultimaSabado: '16:00',           // sábado: última sessão às 16h
+    duracaoMin: 60,                  // duração de cada sessão
   },
   CAPACIDADE_POR_HORARIO: 1,          // atendimentos simultâneos
 
@@ -108,6 +107,10 @@ function amanhaISO() { const d = new Date(); d.setDate(d.getDate() + 1); return 
 function fmtDataLonga(iso) {
   const d = deISO(iso);
   return DIAS_LONGO[d.getDay()] + ', ' + d.getDate() + ' de ' + MESES_LONGO[d.getMonth()];
+}
+function fmtNascimento(iso) {
+  const [a, m, d] = String(iso).split('-');
+  return d + '/' + m + '/' + a;
 }
 function fmtDataCurta(iso) {
   const d = deISO(iso);
@@ -317,6 +320,8 @@ function sanearRegistro(tipo, r) {
   return {
     id: String(r.id), nome: String(r.nome || '').slice(0, 120),
     whats: String(r.whats || '').replace(/\D/g, '').slice(0, 15),
+    email: String(r.email || '').slice(0, 120),
+    nascimento: RE_DATA.test(String(r.nascimento || '')) ? r.nascimento : '',
     criadoEm: Number(r.criadoEm) || 0, planos,
     onboarded: !!r.onboarded, removido: !!r.removido,
     excluido: !!r.excluido, up: Number(r.up) || 0,
@@ -477,15 +482,10 @@ function criarPlano(pacoteId, origem) {
    ------------------------------------------------------------ */
 function horariosDoDia(dataStr) {
   const d = deISO(dataStr || hojeISO());
-  const faixa = d.getDay() === 6 ? CONFIG.HORARIOS.sabado : CONFIG.HORARIOS.semana;
-  const [h0, m0] = faixa.primeira.split(':').map(Number);
-  const [h1, m1] = faixa.ultima.split(':').map(Number);
-  const fim = h1 * 60 + m1;
-  const hs = [];
-  for (let t = h0 * 60 + m0; t <= fim; t += CONFIG.HORARIOS.passoMin) {
-    hs.push(String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'));
+  if (d.getDay() === 6) {
+    return CONFIG.HORARIOS.grade.filter((h) => h <= CONFIG.HORARIOS.ultimaSabado);
   }
-  return hs;
+  return CONFIG.HORARIOS.grade.slice();
 }
 
 /* duas sessões conflitam quando os horários se sobrepõem (a grade é de
@@ -656,9 +656,15 @@ async function entrar() {
   }
   const nome = $('#login-nome').value.trim();
   if (nome.length < 3) { toast('Digite seu nome completo.'); return; }
+  const email = $('#login-email').value.trim();
+  if (!/.+@.+\..+/.test(email)) { toast('Digite um e-mail válido.'); return; }
+  const nascimento = $('#login-nascimento').value;
+  if (!nascimento) { toast('Informe sua data de nascimento.'); return; }
+  const nasc = deISO(nascimento);
+  if (nasc >= new Date() || nasc.getFullYear() < 1920) { toast('Confira a data de nascimento.'); return; }
 
   const novo = {
-    id: uid(), nome, whats,
+    id: uid(), nome, whats, email, nascimento,
     criadoEm: agora(), planos: [], onboarded: false,
   };
   salvarCliente(novo);
@@ -728,6 +734,8 @@ function sair() {
   definirSessao(null);
   $('#login-whats').value = '';
   $('#login-nome').value = '';
+  $('#login-email').value = '';
+  $('#login-nascimento').value = '';
   $('#login-novo').hidden = true;
   renderPerfisConhecidos();
   mostrarTela('tela-login');
@@ -1634,6 +1642,10 @@ function abrirNovaCliente() {
     '<input class="campo" id="nc-nome" type="text" placeholder="Nome da cliente">' +
     '<label class="rotulo" for="nc-whats">WhatsApp</label>' +
     '<input class="campo" id="nc-whats" type="tel" placeholder="(48) 99999-9999">' +
+    '<label class="rotulo" for="nc-email">E-mail (opcional)</label>' +
+    '<input class="campo" id="nc-email" type="email" placeholder="cliente@email.com">' +
+    '<label class="rotulo" for="nc-nasc">Data de nascimento (opcional)</label>' +
+    '<input class="campo" id="nc-nasc" type="date">' +
     '<label class="rotulo">Planos (opcional — pode marcar mais de um)</label>' +
     '<div id="nc-pacotes">' +
       PACOTES.map((p) =>
@@ -1663,7 +1675,12 @@ function abrirNovaCliente() {
       renderAdmClientes();
       return;
     }
-    const nova = { id: uid(), nome, whats, criadoEm: agora(), planos: [], onboarded: true };
+    const nova = {
+      id: uid(), nome, whats,
+      email: $('#nc-email').value.trim(),
+      nascimento: $('#nc-nasc').value || '',
+      criadoEm: agora(), planos: [], onboarded: true,
+    };
     for (const pac of pacotes) nova.planos.push(criarPlano(pac, 'admin'));
     salvarCliente(nova);
     fecharModal('modal-cliente');
@@ -1697,10 +1714,16 @@ function abrirFichaCliente(id) {
   corpo.innerHTML =
     '<div class="modal-topo"><h3>' + esc(c.nome) + '</h3><button class="fechar" data-fecha="modal-cliente">×</button></div>' +
 
-    '<div class="linha-flex mb-14">' +
+    '<div class="linha-flex mb-8">' +
       '<a class="btn-mini verde" style="flex:none" target="_blank" rel="noopener" href="' +
         esc(linkZap(c.whats, 'Olá, ' + primeiroNome(c.nome) + '! Aqui é do Spa Vanessa Lima.')) + '">WhatsApp · ' + fmtWhats(c.whats) + '</a>' +
     '</div>' +
+    ((c.email || c.nascimento)
+      ? '<p class="texto-suave mb-14" style="font-size:.85rem">' +
+          (c.email ? esc(c.email) : '') +
+          (c.nascimento ? (c.email ? ' · ' : '') + 'aniversário: ' + fmtNascimento(c.nascimento) : '') +
+        '</p>'
+      : '<div class="mb-8"></div>') +
 
     '<div class="estatisticas mb-14">' +
       '<div class="estat"><b>' + freq30 + '</b><span>últimos 30 dias</span></div>' +
@@ -1807,7 +1830,7 @@ function abrirFichaCliente(id) {
             for (const a of agsDoCliente(c.id)) {
               if (a.status !== 'cancelada') { a.status = 'cancelada'; salvarAgendamento(a); }
             }
-            c.nome = ''; c.whats = ''; c.planos = [];
+            c.nome = ''; c.whats = ''; c.email = ''; c.nascimento = ''; c.planos = [];
             c.onboarded = false; c.removido = true; c.excluido = true;
             salvarCliente(c);
             fecharModal('modal-cliente');
@@ -1894,8 +1917,8 @@ function ligarFechamento(raiz) {
 function ligarEventos() {
   // login
   $('#btn-entrar').addEventListener('click', entrar);
-  $('#login-whats').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
-  $('#login-nome').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+  ['#login-whats', '#login-nome', '#login-email', '#login-nascimento'].forEach((sel) =>
+    $(sel).addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); }));
   $('#btn-abrir-equipe').addEventListener('click', () => { $('#pin-campo').value = ''; abrirModal('modal-pin'); });
   $('#btn-pin-ok').addEventListener('click', verificarPin);
   $('#pin-campo').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btn-pin-ok').click(); });
