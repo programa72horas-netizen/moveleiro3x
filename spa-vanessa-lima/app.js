@@ -18,14 +18,20 @@ const CONFIG = {
   // rode  await gerarHashPin('NovoCodigo')  — cole o resultado aqui.
   PIN_EQUIPE_HASH: '2ae48495678af6fd98c5c36afa297fc3bd32eca791711ee7ab5327ed97cc92c6',
 
-  // Funcionamento do spa — grade fixa de horários de início
+  // Funcionamento do spa — vagas por horário em cada dia da semana
+  // (1=segunda … 6=sábado; dia ausente = fechado; o número é quantas
+  //  clientes podem agendar no MESMO horário)
   HORARIOS: {
-    diasSemana: [1, 2, 3, 4, 5, 6],  // 0=dom, 1=seg … 6=sáb
-    grade: ['08:00', '09:15', '10:30', '12:00', '13:30', '14:45', '16:00', '17:15', '18:30'],
-    ultimaSabado: '16:00',           // sábado: última sessão às 16h
-    duracaoMin: 60,                  // duração de cada sessão
+    duracaoMin: 60, // duração de cada sessão
+    vagas: {
+      1: { '08:00': 3, '09:15': 3, '10:30': 3, '12:00': 3, '13:30': 4, '14:45': 4, '16:00': 4, '17:15': 4, '18:30': 3 }, // segunda
+      2: { '08:00': 3, '09:15': 3, '10:30': 3, '12:00': 3, '13:30': 3, '14:45': 3, '16:00': 3, '17:15': 3, '18:30': 3 }, // terça
+      3: { '08:00': 3, '09:15': 3, '10:30': 3, '12:00': 3, '13:30': 3, '14:45': 4, '16:00': 4, '17:15': 4, '18:30': 4 }, // quarta
+      4: { '08:00': 3, '09:15': 3, '10:30': 3, '12:00': 3, '13:30': 4, '14:45': 4, '16:00': 4, '17:15': 4, '18:30': 3 }, // quinta
+      5: { '08:00': 3, '09:15': 3, '10:30': 3, '12:00': 3, '13:30': 3, '14:45': 4, '16:00': 4, '17:15': 4, '18:30': 4 }, // sexta
+      6: { '08:00': 3, '09:15': 3, '10:30': 3, '13:30': 3, '14:45': 3, '16:00': 3 },                                     // sábado (sem 12h)
+    },
   },
-  CAPACIDADE_POR_HORARIO: 1,          // atendimentos simultâneos
 
   // Falta (não compareceu) desconta sessão do pacote?
   FALTA_CONSOME: false,
@@ -480,16 +486,21 @@ function criarPlano(pacoteId, origem) {
 /* ------------------------------------------------------------
    Agenda: horários e conflitos
    ------------------------------------------------------------ */
-function horariosDoDia(dataStr) {
+function vagasDoDia(dataStr) {
   const d = deISO(dataStr || hojeISO());
-  if (d.getDay() === 6) {
-    return CONFIG.HORARIOS.grade.filter((h) => h <= CONFIG.HORARIOS.ultimaSabado);
-  }
-  return CONFIG.HORARIOS.grade.slice();
+  return CONFIG.HORARIOS.vagas[d.getDay()] || null;
+}
+function horariosDoDia(dataStr) {
+  const vagas = vagasDoDia(dataStr);
+  return vagas ? Object.keys(vagas) : [];
+}
+function capacidadeDoHorario(dataStr, hora) {
+  const vagas = vagasDoDia(dataStr);
+  return (vagas && vagas[hora]) || 0;
 }
 
-/* duas sessões conflitam quando os horários se sobrepõem (a grade é de
-   30 em 30 min, mas cada sessão dura CONFIG.HORARIOS.duracaoMin) */
+/* conta quantas sessões já ocupam a janela daquele horário (sobreposição
+   pela duração, para respeitar também agendamentos antigos fora da grade) */
 function ocupacoes(dataStr, hora) {
   const inicio = deISO(dataStr, hora).getTime();
   const dur = CONFIG.HORARIOS.duracaoMin * 60000;
@@ -499,10 +510,10 @@ function ocupacoes(dataStr, hora) {
   ).length;
 }
 function horarioLivre(dataStr, hora) {
-  return ocupacoes(dataStr, hora) < CONFIG.CAPACIDADE_POR_HORARIO;
+  return ocupacoes(dataStr, hora) < capacidadeDoHorario(dataStr, hora);
 }
 function diaAberto(d) {
-  return CONFIG.HORARIOS.diasSemana.includes(d.getDay());
+  return !!CONFIG.HORARIOS.vagas[d.getDay()];
 }
 
 /** Datas semanais para uma série; semanas com horário ocupado são puladas e compensadas no fim. */
