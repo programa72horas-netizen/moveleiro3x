@@ -287,11 +287,31 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 .membro-papel.admin { color: var(--acento-2); border-color: rgba(253, 217, 13, 0.5); }
 .linha-membro .botao { margin-left: auto; }
 
-.tabela-produtividade { display: grid; gap: 2px; }
+.resumo-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
+.tile {
+  background: var(--fundo-3); border: 1px solid var(--borda); border-radius: 12px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
+}
+.tile-valor { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tile-rotulo { font-size: 12px; color: var(--texto-2); }
+
+#equipe-grafico { margin-bottom: 18px; }
+.grafico-legenda {
+  display: flex; align-items: center; gap: 18px; margin-bottom: 8px;
+  font-size: 13px; color: var(--texto-2);
+}
+.grafico-legenda span { display: inline-flex; align-items: center; gap: 7px; }
+.grafico-legenda i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.grafico-titulo { margin-left: auto; font-size: 12px; }
+
+.tabela-produtividade { display: grid; gap: 2px; overflow-x: auto; }
 .linha-prod {
-  display: grid; grid-template-columns: 1.6fr repeat(6, 1fr); gap: 8px;
+  display: grid; grid-template-columns: 1.4fr repeat(6, 0.7fr) 1fr 1fr; gap: 8px;
   align-items: center; padding: 9px 10px; border-radius: 8px;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; min-width: 640px;
 }
 .linha-prod:nth-child(even) { background: var(--fundo-3); }
 .linha-prod span { text-align: center; }
@@ -360,6 +380,21 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 .cartao-historico-info small { color: var(--texto-2); display: block; margin-top: 2px; }
 
 .historico-vazio { color: var(--texto-2); padding: 30px 0; }
+
+/* ---------- seletor do banco de imagens ---------- */
+
+.seletor-fundo {
+  position: fixed; inset: 0; z-index: 60; background: rgba(8, 5, 8, 0.72);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.seletor-caixa {
+  background: var(--fundo-2); border: 1px solid var(--borda); border-radius: 16px;
+  padding: 20px; width: min(720px, 100%); max-height: 80vh; overflow: auto;
+}
+.seletor-topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.seletor-topo h3 { margin: 0; font-size: 16px; }
+.ref-clicavel { cursor: pointer; transition: transform 0.08s ease, outline-color 0.1s ease; }
+.ref-clicavel:hover { transform: scale(1.05); outline: 3px solid var(--acento-2); }
 
 /* ---------- aviso (toast) ---------- */
 

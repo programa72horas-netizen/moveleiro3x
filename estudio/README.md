@@ -6,7 +6,14 @@ velocidade:
 
 - **Cada designer tem seu acesso** (nome + código), gerido pela
   administradora na tela **Equipe** — que também mostra a
-  **produtividade** de cada um (artes, gerações de IA e PNGs, 7/30 dias).
+  **produtividade** de cada um: artes, gerações de IA, PNGs, **tempo por
+  arte e tempo total**, com gráfico dos últimos 14 dias.
+- **Quantidade de artes por planejamento**: modo automático gera **uma
+  arte para cada criativo** listado no planejamento (até 24), ou um
+  número fixo à escolha.
+- **Banco de imagens por cliente**: todas as fotos e elementos da marca
+  ficam guardados no app e entram em qualquer arte pelo botão
+  **"Do banco"**.
 - **Modelos de layout travados** (1080×1350, formato feed): a IA escreve
   apenas os textos — o desenho nunca muda, então toda arte sai idêntica
   ao modelo aprovado. O app começa **limpo**: só os modelos que a
@@ -16,7 +23,9 @@ velocidade:
   (sem inventar preço, data ou condição).
 - **Tudo na arte é editável**: além dos campos de texto, dá para clicar
   em **qualquer elemento** da arte e arrastar para mover, mudar tamanho,
-  cor, escala ou ocultar — os ajustes valem para o PNG exportado.
+  cor, escala, **rotação, transparência, camada (frente/trás),
+  alinhamento, peso e itálico**, ou ocultar — os ajustes valem para o
+  PNG exportado.
 - **Exportação em PNG** (1080×1350) direto do navegador, com as fontes
   embutidas — pronto para postar.
 - **Marcas/clientes**: logo, cores e contato de cada loja ficam salvos e
@@ -32,8 +41,11 @@ Na tela **Modelo**, a seção **"Meus modelos"** tem o botão
    modelo que você já usa (a 1ª imagem é a principal; as outras servem
    de referência de detalhes). A IA recria o layout como HTML fiel
    **uma única vez**; você confere na prévia ao vivo, ajusta os campos
-   e salva. Depois disso o layout fica **travado**: no dia a dia a IA
-   só escreve os textos, nunca mexe no desenho.
+   e salva. Se algo divergir da referência, o botão **🔁 Refinar**
+   compara e corrige — e quando o fundo for uma foto/textura complexa,
+   a IA cria o campo `imgFundo` para você enviar o fundo original.
+   Depois de salvo o layout fica **travado**: no dia a dia a IA só
+   escreve os textos, nunca mexe no desenho.
 2. **Colar HTML** — cole um layout de 1080×1350 com marcadores
    `{{titulo}}`, `{{preco}}`, `{{imgFoto}}`… Cada marcador vira um campo
    editável automaticamente. Marcadores da marca (`{{marcaNome}}`,

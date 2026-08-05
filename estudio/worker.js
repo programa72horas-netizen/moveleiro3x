@@ -82,9 +82,9 @@ async function membroValido(env, nome, pin) {
   return equipe.find((m) => m.nome === nome && m.pin === pin) || null;
 }
 
-// schema do JSON que o Claude é obrigado a devolver (3 variações,
-// um campo de texto por slot do modelo escolhido)
-function schemaDasVariacoes(slots) {
+// schema do JSON que o Claude é obrigado a devolver: uma entrada por arte,
+// com um campo de texto por slot do modelo escolhido
+function schemaDasVariacoes(slots, quantidade) {
   const propriedades = {};
   const obrigatorios = [];
   for (const slot of slots) {
@@ -95,14 +95,17 @@ function schemaDasVariacoes(slots) {
     };
     obrigatorios.push(slot.key);
   }
+  const auto = quantidade === 'auto';
   return {
     type: 'object',
     properties: {
       variacoes: {
         type: 'array',
-        minItems: 3,
-        maxItems: 3,
-        description: '3 variações completas dos textos da arte',
+        minItems: auto ? 1 : quantidade,
+        maxItems: auto ? 24 : quantidade,
+        description: auto
+          ? 'Uma arte completa para CADA criativo/item do planejamento, na ordem'
+          : quantidade + ' artes completas',
         items: { type: 'object', properties: propriedades, required: obrigatorios },
       },
     },
@@ -122,12 +125,19 @@ function normalizarVariacoes(entrada) {
   return Array.isArray(valor) ? valor.filter((v) => v && typeof v === 'object') : null;
 }
 
-function montarPrompt(corpo) {
+function montarPrompt(corpo, quantidade) {
   const { modelo, plano, marca } = corpo;
   const listaSlots = modelo.slots
     .map((s) => `- ${s.key} (${s.rotulo}): máx ${s.max} caracteres.` +
       (s.exemplo ? ` Exemplo de tamanho/tom: "${s.exemplo}"` : ''))
     .join('\n');
+  const regraQuantidade = quantidade === 'auto'
+    ? `O planejamento abaixo lista VÁRIOS criativos/artes (ex.: "CRIATIVO 1", "ARTE 2",
+itens numerados ou blocos separados). Escreva UMA arte completa para CADA item,
+na ordem em que aparecem — nem mais, nem menos. Quando o item já traz o texto
+pronto, USE esse texto (ajustado aos limites dos campos); não reescreva do zero.`
+    : `Escreva exatamente ${quantidade} variações genuinamente diferentes entre si:
+mude o ângulo (direto ao ponto / urgência / benefício / prova), não apenas sinônimos.`;
 
   const sistema = `Você é o redator sênior do método 72 Horas, especialista em varejo
 de móveis no Brasil. Você escreve textos curtos de altíssima conversão para artes de
@@ -142,8 +152,7 @@ REGRAS INEGOCIÁVEIS:
    são melhores que textos no limite.
 3. Português do Brasil, correto e natural. Campos indicados em CAIXA ALTA nos
    exemplos devem vir em CAIXA ALTA.
-4. As 3 variações precisam ser realmente diferentes entre si: mude o ângulo
-   (ex.: direto ao ponto / urgência / benefício), não apenas sinônimos.
+4. ${regraQuantidade}
 5. Nada de emojis, hashtags, asteriscos ou aspas decorativas.
 6. Escreva SOMENTE os campos pedidos, usando a ferramenta entregar_variacoes.`;
 
@@ -162,7 +171,9 @@ PLANEJAMENTO DO DESIGNER:
 - Planejamento completo/observações:
 ${plano.texto || '(sem observações)'}
 
-Escreva as 3 variações agora.`;
+${quantidade === 'auto'
+    ? 'Conte os criativos/itens do planejamento e escreva agora UMA arte para cada um — o array variacoes deve ter exatamente essa contagem.'
+    : `Escreva agora EXATAMENTE ${quantidade} artes — o array variacoes deve ter ${quantidade} objetos, nem mais, nem menos.`}`;
 
   return { sistema, usuario };
 }
@@ -198,17 +209,20 @@ async function gerar(pedido, env) {
   }
   plano.texto = String(plano.texto || '').slice(0, 6000);
 
-  const { sistema, usuario } = montarPrompt(corpo);
+  const quantidade = corpo.quantidade === 'auto'
+    ? 'auto'
+    : Math.max(1, Math.min(24, Number(corpo.quantidade) || 3));
+  const { sistema, usuario } = montarPrompt(corpo, quantidade);
 
   const chamada = {
     model: env.MODEL || MODELO_PADRAO,
-    max_tokens: 2048,
+    max_tokens: 8192,
     system: sistema,
     messages: [{ role: 'user', content: usuario }],
     tools: [{
       name: 'entregar_variacoes',
-      description: 'Entrega as 3 variações de texto da arte, uma por objeto.',
-      input_schema: schemaDasVariacoes(modelo.slots),
+      description: 'Entrega as artes escritas, uma por objeto do array variacoes.',
+      input_schema: schemaDasVariacoes(modelo.slots, quantidade),
     }],
     tool_choice: { type: 'tool', name: 'entregar_variacoes' },
   };
@@ -369,6 +383,62 @@ async function tratarEquipe(pedido, env) {
   return resposta({ equipe: nova });
 }
 
+/* ---------- banco de imagens do cliente (por marca) ---------- */
+
+const IMAGEM_DATAURL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+async function tratarImagens(pedido, env) {
+  let corpo;
+  try { corpo = await pedido.json(); } catch (_) { return resposta({ erro: 'Corpo inválido.' }, 400); }
+  const membro = await membroValido(env, corpo.designer, corpo.pin);
+  if (!membro) return resposta({ erro: 'Acesso não autorizado.' }, 401);
+  if (!env.MODELOS) {
+    return resposta({ erro: 'O banco de imagens precisa do KV configurado (README).', semKV: true }, 501);
+  }
+  const marcaId = String(corpo.marcaId || '').slice(0, 60);
+  if (!/^[a-zA-Z0-9-]+$/.test(marcaId)) return resposta({ erro: 'Marca inválida.' }, 400);
+  const chaveIndice = 'imgs:' + marcaId;
+  let indice = [];
+  try { indice = JSON.parse(await env.MODELOS.get(chaveIndice)) || []; } catch (_) { indice = []; }
+
+  if (corpo.acao === 'listar') return resposta({ imagens: indice });
+
+  if (corpo.acao === 'obter') {
+    const item = indice.find((i) => i.id === corpo.id);
+    if (!item) return resposta({ erro: 'Imagem não encontrada.' }, 404);
+    const imagem = await env.MODELOS.get('img:' + corpo.id);
+    return resposta({ imagem });
+  }
+
+  if (corpo.acao === 'enviar') {
+    const nome = String(corpo.nome || 'imagem').slice(0, 60);
+    if (!IMAGEM_DATAURL.test(corpo.imagem || '') || corpo.imagem.length > 1500000) {
+      return resposta({ erro: 'Imagem inválida ou grande demais (~1 MB após o redimensionamento).' }, 400);
+    }
+    if (!IMAGEM_DATAURL.test(corpo.thumb || '') || corpo.thumb.length > 120000) {
+      return resposta({ erro: 'Miniatura inválida.' }, 400);
+    }
+    const id = 'im' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await env.MODELOS.put('img:' + id, corpo.imagem);
+    indice.unshift({ id, nome, thumb: corpo.thumb });
+    for (const removida of indice.slice(300)) {
+      await env.MODELOS.delete('img:' + removida.id);
+    }
+    indice = indice.slice(0, 300);
+    await env.MODELOS.put(chaveIndice, JSON.stringify(indice));
+    return resposta({ imagens: indice });
+  }
+
+  if (corpo.acao === 'excluir') {
+    indice = indice.filter((i) => i.id !== corpo.id);
+    await env.MODELOS.delete('img:' + corpo.id);
+    await env.MODELOS.put(chaveIndice, JSON.stringify(indice));
+    return resposta({ imagens: indice });
+  }
+
+  return resposta({ erro: 'Ação desconhecida.' }, 400);
+}
+
 // contadores diários por designer: stats:<nome>:<AAAA-MM-DD>
 async function registrarEvento(pedido, env) {
   let corpo;
@@ -378,12 +448,18 @@ async function registrarEvento(pedido, env) {
   if (!env.MODELOS) return resposta({ ok: false, semKV: true });
   const tipo = ['geracao', 'exportacao', 'arte'].includes(corpo.tipo) ? corpo.tipo : null;
   if (!tipo) return resposta({ erro: 'Tipo de evento desconhecido.' }, 400);
-  const quantidade = Math.max(1, Math.min(20, Number(corpo.quantidade) || 1));
+  const quantidade = Math.max(1, Math.min(30, Number(corpo.quantidade) || 1));
+  // tempo (em segundos) da arte, do início à primeira exportação
+  const segundos = Math.max(0, Math.min(4 * 3600, Number(corpo.segundos) || 0));
   const dia = new Date().toISOString().slice(0, 10);
   const chave = `stats:${membro.nome}:${dia}`;
   let contadores = {};
   try { contadores = JSON.parse(await env.MODELOS.get(chave)) || {}; } catch (_) { contadores = {}; }
   contadores[tipo] = (contadores[tipo] || 0) + quantidade;
+  if (segundos) {
+    contadores.segundos = (contadores.segundos || 0) + segundos;
+    contadores.artesComTempo = (contadores.artesComTempo || 0) + 1;
+  }
   // expira sozinho depois de ~90 dias para o KV não acumular para sempre
   await env.MODELOS.put(chave, JSON.stringify(contadores), { expirationTtl: 60 * 60 * 24 * 90 });
   return resposta({ ok: true });
@@ -401,7 +477,10 @@ async function estatisticas(pedido, env) {
   }
   const corte7 = Date.now() - 7 * 86400000;
   const corte30 = Date.now() - 30 * 86400000;
+  const corte14 = Date.now() - 14 * 86400000;
+  const zerado = () => ({ geracao: 0, exportacao: 0, arte: 0, segundos: 0, artesComTempo: 0 });
   const porDesigner = {};
+  const porDia = {}; // série da equipe inteira, para o gráfico
   let cursor;
   do {
     const pagina = await env.MODELOS.list({ prefix: 'stats:', cursor });
@@ -414,12 +493,18 @@ async function estatisticas(pedido, env) {
       if (!(quando >= corte30)) continue;
       let contadores = {};
       try { contadores = JSON.parse(await env.MODELOS.get(chaveInfo.name)) || {}; } catch (_) { continue; }
-      const alvo = porDesigner[nome] = porDesigner[nome] ||
-        { nome, d7: { geracao: 0, exportacao: 0, arte: 0 }, d30: { geracao: 0, exportacao: 0, arte: 0 } };
-      for (const tipo of ['geracao', 'exportacao', 'arte']) {
+      const alvo = porDesigner[nome] = porDesigner[nome] || { nome, d7: zerado(), d30: zerado() };
+      for (const tipo of ['geracao', 'exportacao', 'arte', 'segundos', 'artesComTempo']) {
         const valor = contadores[tipo] || 0;
         alvo.d30[tipo] += valor;
         if (quando >= corte7) alvo.d7[tipo] += valor;
+      }
+      if (quando >= corte14) {
+        const doDia = porDia[dia] = porDia[dia] || { dia, arte: 0, exportacao: 0, geracao: 0, segundos: 0 };
+        doDia.arte += contadores.arte || 0;
+        doDia.exportacao += contadores.exportacao || 0;
+        doDia.geracao += contadores.geracao || 0;
+        doDia.segundos += contadores.segundos || 0;
       }
     }
     cursor = pagina.list_complete ? null : pagina.cursor;
@@ -427,10 +512,18 @@ async function estatisticas(pedido, env) {
   const equipe = await equipeAtual(env);
   // toda a equipe aparece, mesmo quem ainda não produziu nada
   for (const membro of equipe) {
-    porDesigner[membro.nome] = porDesigner[membro.nome] ||
-      { nome: membro.nome, d7: { geracao: 0, exportacao: 0, arte: 0 }, d30: { geracao: 0, exportacao: 0, arte: 0 } };
+    porDesigner[membro.nome] = porDesigner[membro.nome] || { nome: membro.nome, d7: zerado(), d30: zerado() };
   }
-  return resposta({ linhas: Object.values(porDesigner).sort((a, b) => b.d30.geracao - a.d30.geracao) });
+  // série contínua dos últimos 14 dias (dias sem produção entram zerados)
+  const serie = [];
+  for (let atras = 13; atras >= 0; atras--) {
+    const dia = new Date(Date.now() - atras * 86400000).toISOString().slice(0, 10);
+    serie.push(porDia[dia] || { dia, arte: 0, exportacao: 0, geracao: 0, segundos: 0 });
+  }
+  return resposta({
+    linhas: Object.values(porDesigner).sort((a, b) => b.d30.arte - a.d30.arte || b.d30.geracao - a.d30.geracao),
+    serie,
+  });
 }
 
 /* ---------- replicar um layout a partir de imagens ---------- */
@@ -458,39 +551,65 @@ async function replicar(pedido, env) {
 HTML/CSS pixel a pixel. Você recebe a imagem de uma arte de referência e a recria
 como um modelo REUTILIZÁVEL de 1080×1350 pixels.
 
+FIDELIDADE É O CRITÉRIO Nº 1. O cliente vai comparar sua recriação lado a lado
+com a imagem original — cores, posições, tamanhos e o clima da peça precisam
+bater. Antes de escrever, descreva mentalmente a referência região por região
+(fundo, topo, centro, base) e só então recrie.
+
 REGRAS OBRIGATÓRIAS:
 1. Um único bloco HTML, começando por <div class="a72" style="..."> (o app já
    define .a72 como position:relative, 1080×1350, overflow:hidden). Todo o
    estilo restante deve ser inline (style="...").
-2. Reproduza fielmente: cores exatas, gradientes, posições, proporções, pesos
-   de fonte, caixa alta, sombras, selos, faixas e formas da referência.
-3. Fontes disponíveis: 'Montserrat' (pesos 100-900, normal e itálico) e
-   'Poppins' (600, 800, 900, 900 itálico). Escolha a mais parecida.
-4. PROIBIDO: URLs externas, <script>, <link>, <iframe>, imagens http(s).
-5. Cada texto editável da arte vira um marcador {{chaveCamelCase}} no lugar do
+2. FUNDO FIEL: fundos ricos exigem VÁRIOS backgrounds empilhados na mesma
+   propriedade (radial-gradient para focos de luz e vinhetas + linear-gradient
+   para varreduras + conic-gradient para raios/dobras), com as cores EXATAS
+   amostradas da referência. NUNCA simplifique um fundo rico num gradiente de
+   duas cores. Se o fundo for uma fotografia ou textura impossível de
+   reproduzir em CSS, coloque como primeiro elemento
+   <img src="{{imgFundo}}" style="position:absolute;inset:0;width:100%;
+   height:100%;object-fit:cover"/> e recrie os elementos por cima — e avise no
+   campo "notas" que a equipe deve enviar a imagem de fundo original.
+3. Posições e proporções exatas: meça na referência (é 1080×1350) onde cada
+   elemento começa e termina e use position:absolute com esses valores.
+   Tamanhos de fonte proporcionais aos da referência.
+4. Fontes disponíveis: 'Montserrat' (pesos 100-900, normal e itálico) e
+   'Poppins' (400-900, itálico no 900). Escolha a mais parecida, com o MESMO
+   peso visual (fino/negro), caixa e inclinação da referência.
+5. PROIBIDO: URLs externas, <script>, <link>, <iframe>, imagens http(s).
+6. Cada texto editável da arte vira um marcador {{chaveCamelCase}} no lugar do
    texto (ex.: {{titulo}}, {{preco}}, {{cta}}). Use o texto real da referência
    como "exemplo" do campo.
-6. Fotos/imagens da referência viram <img src="{{imgFoto}}" style="..."/> com
-   object-fit adequado (chaves de imagem começam com "img"). Formas, ícones e
-   fundos desenháveis devem ser recriados em CSS/SVG inline, não como imagem.
-7. Onde houver logotipo ou contato da loja, use os marcadores da marca:
+7. Fotos/objetos recortados da referência viram <img src="{{imgFoto}}"
+   style="..."/> com object-fit adequado (chaves de imagem começam com "img").
+   Formas geométricas, selos, faixas e ícones simples devem ser recriados em
+   CSS/SVG inline, não como imagem.
+8. Onde houver logotipo ou contato da loja, use os marcadores da marca:
    {{marcaNome}}, {{marcaLogo}} (dataURL de imagem), {{marcaWhatsapp}},
    {{marcaEndereco}}, e as cores {{marcaCor1}}/{{marcaCor2}} quando a arte usar
    as cores da marca.
-8. Entregue também a lista de campos (slots) com rótulo em português, limite de
+9. Entregue também a lista de campos (slots) com rótulo em português, limite de
    caracteres realista (comprimento do texto da referência + ~40%), tipo
-   (texto/imagem), multilinha e o texto de exemplo vindo da referência.`;
+   (texto/imagem), multilinha e o texto de exemplo vindo da referência — e o
+   campo "notas" com qualquer aviso importante para a equipe.`;
 
+  const refinando = typeof corpo.htmlAtual === 'string' && corpo.htmlAtual.trim().length > 0;
+  const pedidoTexto = refinando
+    ? 'Este é o HTML ATUAL do modelo, que NÃO ficou fiel o bastante à referência:\n\n' +
+      String(corpo.htmlAtual).slice(0, 200000) +
+      '\n\nCompare com a(s) imagem(ns) e devolva a versão CORRIGIDA, muito mais fiel — ' +
+      'conserte fundo, cores, posições e tamanhos que estiverem diferentes. ' +
+      'Mantenha os marcadores {{...}} já existentes sempre que possível.'
+    : (imagens.length > 1
+      ? 'Recrie a arte da PRIMEIRA imagem como modelo reutilizável; use as demais imagens ' +
+        'como referência extra de detalhes, variações e elementos da mesma identidade.'
+      : 'Recrie esta arte como modelo reutilizável seguindo as regras.');
   const conteudo = [
     ...imagens.map((m) => ({
       type: 'image', source: { type: 'base64', media_type: 'image/' + m[1], data: m[2] },
     })),
     {
       type: 'text',
-      text: (imagens.length > 1
-        ? 'Recrie a arte da PRIMEIRA imagem como modelo reutilizável; use as demais imagens ' +
-          'como referência extra de detalhes, variações e elementos da mesma identidade.'
-        : 'Recrie esta arte como modelo reutilizável seguindo as regras.') +
+      text: pedidoTexto +
         (corpo.observacoes ? '\nObservações da equipe: ' + String(corpo.observacoes).slice(0, 500) : ''),
     },
   ];
@@ -521,6 +640,10 @@ REGRAS OBRIGATÓRIAS:
               },
               required: ['key', 'rotulo', 'max', 'tipo'],
             },
+          },
+          notas: {
+            type: 'string',
+            description: 'Avisos importantes para a equipe (ex.: enviar o fundo original no campo imgFundo). Vazio se não houver.',
           },
         },
         required: ['html', 'slots'],
@@ -555,7 +678,11 @@ REGRAS OBRIGATÓRIAS:
     .replace(/<\s*(script|link|iframe|object|embed)[^>]*\/?\s*>/gi, '')
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '')
     .replace(/url\(\s*['"]?https?:[^)]*\)/gi, 'none');
-  return resposta({ html, slots: saida.slots.slice(0, 24) });
+  return resposta({
+    html,
+    slots: saida.slots.slice(0, 24),
+    notas: String(saida.notas || '').slice(0, 400),
+  });
 }
 
 export default {
@@ -571,6 +698,7 @@ export default {
       '/api/equipe': () => tratarEquipe(pedido, env),
       '/api/eventos': soPost(registrarEvento),
       '/api/estatisticas': soPost(estatisticas),
+      '/api/imagens': soPost(tratarImagens),
     };
     const rota = rotas[url.pathname];
     if (rota) {

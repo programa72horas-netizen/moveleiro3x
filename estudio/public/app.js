@@ -52,7 +52,7 @@ function novaArte(modeloId) {
     id: 'arte-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     modeloId,
     marcaId: Estado.marcas[0] ? Estado.marcas[0].id : 'padrao',
-    plano: { objetivo: 'vender', publico: '', oferta: '', preco: '', prazo: '', texto: '' },
+    plano: { objetivo: 'vender', publico: '', oferta: '', preco: '', prazo: '', texto: '', quantidade: '3' },
     imagens: {},           // slotKey → dataURL
     variacoes: [],         // [{ slotKey: texto }]
     variacaoAtiva: 0,
@@ -63,15 +63,22 @@ function novaArte(modeloId) {
 }
 
 // aviso de produtividade: dispara e esquece — nunca atrapalha o fluxo
-function contarEvento(tipo, quantidade = 1) {
+function contarEvento(tipo, quantidade = 1, segundos = 0) {
   if (!Estado.designer) return;
   try {
     fetch('api/eventos', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ designer: Estado.designer.nome, pin: Estado.pin, tipo, quantidade }),
+      body: JSON.stringify({ designer: Estado.designer.nome, pin: Estado.pin, tipo, quantidade, segundos }),
     }).catch(() => {});
   } catch (_) { /* sem servidor, sem contagem */ }
+}
+
+// tempo da arte (criação → primeira exportação), enviado uma única vez
+function segundosDaArte() {
+  if (!Estado.arte || Estado.arte.tempoRegistrado) return 0;
+  Estado.arte.tempoRegistrado = true;
+  return Math.max(1, Math.min(4 * 3600, Math.round((Date.now() - Estado.arte.criadaEm) / 1000)));
 }
 
 /* ================== PERSISTÊNCIA ================== */
@@ -172,6 +179,7 @@ function montarSelecaoMarcas() {
 function iniciarMarcas() {
   $('#marca-selecao').addEventListener('change', (e) => {
     if (Estado.arte) Estado.arte.marcaId = e.target.value;
+    carregarBanco(); // o banco de imagens é por cliente
   });
 
   $('#botao-nova-marca').addEventListener('click', () => {
@@ -266,28 +274,153 @@ function montarCamposDeImagem() {
     const entrada = document.createElement('input');
     entrada.type = 'file';
     entrada.accept = 'image/*';
+    const aplicar = (dataUrl) => {
+      Estado.arte.imagens[slot.key] = dataUrl;
+      previa.src = dataUrl;
+      previa.hidden = false;
+      if (Estado.telaAtual === 'estudio') pintarArte();
+    };
     entrada.addEventListener('change', async () => {
       const arquivo = entrada.files && entrada.files[0];
       if (!arquivo) return;
       try {
-        const dataUrl = await redimensionarImagem(arquivo);
-        Estado.arte.imagens[slot.key] = dataUrl;
-        previa.src = dataUrl;
-        previa.hidden = false;
-        if (Estado.telaAtual === 'estudio') pintarArte();
+        aplicar(await redimensionarImagem(arquivo));
       } catch (_) {
         avisar('Não consegui ler essa imagem. Tente outro arquivo.', true);
       }
     });
     campo.appendChild(entrada);
+    const doBanco = el('button', 'botao botao-fantasma botao-mini', '📁 Do banco');
+    doBanco.type = 'button';
+    doBanco.title = 'Escolher uma imagem do banco deste cliente';
+    doBanco.addEventListener('click', () => escolherDoBanco(aplicar));
     const previa = el('img', 'imagem-previa');
     previa.alt = '';
     const existente = Estado.arte.imagens[slot.key];
     if (existente) { previa.src = existente; } else { previa.hidden = true; }
     linha.appendChild(campo);
+    linha.appendChild(doBanco);
     linha.appendChild(previa);
     caixa.appendChild(linha);
   }
+}
+
+/* ================== BANCO DE IMAGENS DO CLIENTE ================== */
+/* Fotos e elementos de cada marca ficam no servidor (KV) e podem ser
+ * usados em qualquer campo de imagem de qualquer arte. */
+
+const Banco = { porMarca: {}, disponivel: true };
+
+function marcaIdAtual() {
+  const marca = marcaAtual();
+  return marca ? marca.id : 'padrao';
+}
+
+async function carregarBanco(forcar = false) {
+  const marcaId = marcaIdAtual();
+  if (!forcar && Banco.porMarca[marcaId]) { montarBanco(); return; }
+  try {
+    const dados = await pedirAoServidor('api/imagens', { acao: 'listar', marcaId });
+    Banco.porMarca[marcaId] = dados.imagens || [];
+    Banco.disponivel = true;
+  } catch (erro) {
+    Banco.porMarca[marcaId] = Banco.porMarca[marcaId] || [];
+    if (erro.semKV) Banco.disponivel = false;
+  }
+  montarBanco();
+}
+
+function montarBanco() {
+  const lista = $('#banco-lista');
+  const aviso = $('#banco-aviso');
+  lista.innerHTML = '';
+  aviso.hidden = Banco.disponivel;
+  if (!Banco.disponivel) {
+    aviso.textContent = 'O banco de imagens funciona na versão publicada (KV configurado).';
+  }
+  const imagens = Banco.porMarca[marcaIdAtual()] || [];
+  for (const item of imagens) {
+    const caixa = el('span', 'ref-item');
+    const img = el('img', 'ref-miniatura');
+    img.src = item.thumb;
+    img.alt = item.nome;
+    img.title = item.nome;
+    const remover = el('button', 'ref-remover', '×');
+    remover.type = 'button';
+    remover.title = 'Excluir do banco';
+    remover.addEventListener('click', async () => {
+      if (!window.confirm('Excluir "' + item.nome + '" do banco do cliente?')) return;
+      try {
+        const dados = await pedirAoServidor('api/imagens',
+          { acao: 'excluir', marcaId: marcaIdAtual(), id: item.id });
+        Banco.porMarca[marcaIdAtual()] = dados.imagens || [];
+        montarBanco();
+      } catch (erro) { avisar('Não excluiu: ' + erro.message, true); }
+    });
+    caixa.appendChild(img);
+    caixa.appendChild(remover);
+    lista.appendChild(caixa);
+  }
+  if (!imagens.length && Banco.disponivel) {
+    lista.appendChild(el('p', 'historico-vazio', 'Nenhuma imagem deste cliente ainda.'));
+  }
+}
+
+async function enviarParaBanco(arquivos) {
+  const status = $('#banco-status');
+  let enviadas = 0;
+  for (const arquivo of arquivos) {
+    status.textContent = `Enviando ${enviadas + 1} de ${arquivos.length}…`;
+    try {
+      const imagem = await redimensionarImagem(arquivo, 1600);
+      const thumb = await redimensionarImagem(arquivo, 220);
+      const dados = await pedirAoServidor('api/imagens', {
+        acao: 'enviar',
+        marcaId: marcaIdAtual(),
+        nome: (arquivo.name || 'imagem').replace(/\.[^.]+$/, '').slice(0, 60),
+        imagem,
+        thumb,
+      });
+      Banco.porMarca[marcaIdAtual()] = dados.imagens || [];
+      enviadas++;
+    } catch (erro) {
+      avisar('Falhou o envio de "' + arquivo.name + '": ' + erro.message, true);
+      if (erro.semKV) { Banco.disponivel = false; break; }
+    }
+  }
+  status.textContent = enviadas ? enviadas + ' imagem(ns) no banco ✓' : '';
+  setTimeout(() => { status.textContent = ''; }, 4000);
+  montarBanco();
+}
+
+// abre o seletor para escolher uma imagem do banco e devolve o dataURL
+function escolherDoBanco(aoEscolher) {
+  const fundo = $('#banco-seletor');
+  const lista = $('#banco-seletor-lista');
+  lista.innerHTML = '';
+  const imagens = Banco.porMarca[marcaIdAtual()] || [];
+  if (!imagens.length) {
+    avisar(Banco.disponivel
+      ? 'O banco deste cliente está vazio — envie imagens no cartão "Banco de imagens".'
+      : 'O banco de imagens precisa da versão publicada (KV).', true);
+    return;
+  }
+  for (const item of imagens) {
+    const img = el('img', 'ref-miniatura ref-clicavel');
+    img.src = item.thumb;
+    img.alt = img.title = item.nome;
+    img.addEventListener('click', async () => {
+      fundo.hidden = true;
+      try {
+        const dados = await pedirAoServidor('api/imagens',
+          { acao: 'obter', marcaId: marcaIdAtual(), id: item.id });
+        if (dados.imagem) aoEscolher(dados.imagem);
+        else avisar('Imagem não encontrada no banco.', true);
+      } catch (erro) { avisar('Não carregou a imagem: ' + erro.message, true); }
+    });
+    lista.appendChild(img);
+  }
+  fundo.hidden = false;
 }
 
 /* ================== LOGIN ================== */
@@ -511,6 +644,7 @@ function escolherModelo(modeloId) {
   montarSelecaoMarcas();
   montarCamposDeImagem();
   preencherFormularioPlano();
+  carregarBanco();
   mostrarTela('plano');
 }
 
@@ -524,6 +658,7 @@ function preencherFormularioPlano() {
   $('#plano-preco').value = plano.preco || '';
   $('#plano-prazo').value = plano.prazo || '';
   $('#plano-texto').value = plano.texto || '';
+  $('#plano-quantidade').value = plano.quantidade || '3';
 }
 
 function lerFormularioPlano() {
@@ -534,6 +669,7 @@ function lerFormularioPlano() {
     preco: $('#plano-preco').value.trim(),
     prazo: $('#plano-prazo').value.trim(),
     texto: $('#plano-texto').value.trim(),
+    quantidade: $('#plano-quantidade').value,
   };
 }
 
@@ -549,7 +685,7 @@ function ajustarLimite(texto, max) {
 function aplicarVariacoes(variacoes) {
   const modelo = Modelos.porId(Estado.arte.modeloId);
   const slots = Modelos.slotsDeTexto(modelo);
-  Estado.arte.variacoes = variacoes.slice(0, 3).map((variacao) => {
+  Estado.arte.variacoes = variacoes.slice(0, 24).map((variacao) => {
     const valores = {};
     for (const slot of slots) {
       const valor = variacao && typeof variacao[slot.key] === 'string'
@@ -559,8 +695,8 @@ function aplicarVariacoes(variacoes) {
     }
     return valores;
   });
-  while (Estado.arte.variacoes.length < 3) {
-    Estado.arte.variacoes.push({ ...Estado.arte.variacoes[0] });
+  if (!Estado.arte.variacoes.length) {
+    Estado.arte.variacoes = [Modelos.exemplos(modelo)];
   }
   Estado.arte.variacaoAtiva = 0;
   Estado.arte.ajustes = {}; // textos novos zeram os ajustes visuais
@@ -618,7 +754,9 @@ async function gerarComIA() {
   const status = $('#plano-status');
   botao.disabled = true;
   status.hidden = false;
-  status.textContent = 'A IA está escrevendo as 3 variações seguindo o modelo "' + modelo.nome + '"…';
+  status.textContent = plano.quantidade === 'auto'
+    ? 'A IA está escrevendo uma arte para cada criativo do planejamento ("' + modelo.nome + '")…'
+    : 'A IA está escrevendo as ' + plano.quantidade + ' artes seguindo o modelo "' + modelo.nome + '"…';
 
   try {
     const marca = marcaAtual();
@@ -638,6 +776,7 @@ async function gerarComIA() {
           })),
         },
         plano,
+        quantidade: plano.quantidade === 'auto' ? 'auto' : Number(plano.quantidade) || 3,
         marca: { nome: marca.nome, whatsapp: marca.whatsapp, endereco: marca.endereco },
       }),
     });
@@ -693,10 +832,19 @@ function aplicarAjusteNoElemento(elemento, ajuste, transformBase) {
   const partes = [];
   if (ajuste.dx || ajuste.dy) partes.push(`translate(${ajuste.dx || 0}px, ${ajuste.dy || 0}px)`);
   if (transformBase) partes.push(transformBase);
+  if (ajuste.rot) partes.push(`rotate(${ajuste.rot}deg)`);
   if (ajuste.escala && ajuste.escala !== 1) partes.push(`scale(${ajuste.escala})`);
   elemento.style.transform = partes.join(' ');
   if (ajuste.fonte) elemento.style.fontSize = ajuste.fonte + 'px';
   if (ajuste.cor) elemento.style.color = ajuste.cor;
+  if (ajuste.opac !== undefined && ajuste.opac !== 1) elemento.style.opacity = ajuste.opac;
+  if (ajuste.z) {
+    elemento.style.zIndex = ajuste.z;
+    if (!elemento.style.position) elemento.style.position = 'relative';
+  }
+  if (ajuste.alin) elemento.style.textAlign = ajuste.alin;
+  if (ajuste.peso) elemento.style.fontWeight = ajuste.peso;
+  if (ajuste.ital !== undefined) elemento.style.fontStyle = ajuste.ital ? 'italic' : 'normal';
 }
 
 // versão para exportação: aplica os ajustes num render recém-criado
@@ -744,12 +892,19 @@ function ajusteAtual(criar = false) {
   return mapa[Ajuste.eid] || null;
 }
 
+// valores neutros não contam como ajuste — o registro some quando volta ao padrão
+const AJUSTE_NEUTRO = { dx: 0, dy: 0, escala: 1, rot: 0, opac: 1, z: 0, ital: false, oculto: false };
+
 function limparAjusteVazio() {
   const mapa = ajustesDaVariacao(Estado.arte.variacaoAtiva);
   const ajuste = mapa[Ajuste.eid];
-  if (ajuste && !ajuste.dx && !ajuste.dy && !ajuste.escala && !ajuste.fonte && !ajuste.cor && !ajuste.oculto) {
-    delete mapa[Ajuste.eid];
+  if (!ajuste) return;
+  for (const [chave, valor] of Object.entries(ajuste)) {
+    if (valor === undefined || valor === null || valor === '' || AJUSTE_NEUTRO[chave] === valor) {
+      delete ajuste[chave];
+    }
   }
+  if (!Object.keys(ajuste).length) delete mapa[Ajuste.eid];
 }
 
 function rotuloDoElemento(elemento) {
@@ -788,6 +943,9 @@ function repintarElementoSelecionado() {
   aplicarAjusteNoElemento(elemento, ajuste, elemento.dataset.e72Base || '');
 }
 
+const CICLO_ALINHAR = [undefined, 'left', 'center', 'right'];
+const CICLO_PESO = [undefined, '900', '700', '400'];
+
 function mudarAjuste(mudanca) {
   if (Ajuste.eid === null) return;
   const elemento = elementoSelecionado();
@@ -799,10 +957,35 @@ function mudarAjuste(mudanca) {
   if (mudanca.escalaFator) {
     ajuste.escala = Math.max(0.2, Math.min(4, +( (ajuste.escala || 1) * mudanca.escalaFator ).toFixed(3)));
   }
+  if (mudanca.rotDelta) {
+    ajuste.rot = Math.max(-180, Math.min(180, (ajuste.rot || 0) + mudanca.rotDelta));
+  }
+  if (mudanca.opacDelta) {
+    ajuste.opac = Math.max(0.1, Math.min(1, +((ajuste.opac ?? 1) + mudanca.opacDelta).toFixed(2)));
+  }
+  if (mudanca.zDelta) {
+    ajuste.z = Math.max(-50, Math.min(50, (ajuste.z || 0) + mudanca.zDelta));
+  }
+  if (mudanca.cicloAlinhar) {
+    ajuste.alin = CICLO_ALINHAR[(CICLO_ALINHAR.indexOf(ajuste.alin) + 1) % CICLO_ALINHAR.length];
+    if (!ajuste.alin) elemento.style.textAlign = '';
+  }
+  if (mudanca.cicloPeso) {
+    ajuste.peso = CICLO_PESO[(CICLO_PESO.indexOf(ajuste.peso) + 1) % CICLO_PESO.length];
+    if (!ajuste.peso) elemento.style.fontWeight = '';
+  }
+  if (mudanca.alternarItalico) {
+    ajuste.ital = !ajuste.ital;
+    if (!ajuste.ital) elemento.style.fontStyle = '';
+  }
   if ('cor' in mudanca) ajuste.cor = mudanca.cor;
   if (mudanca.alternarOculto) ajuste.oculto = !ajuste.oculto;
   if (mudanca.zerar) {
     delete ajustesDaVariacao(Estado.arte.variacaoAtiva)[Ajuste.eid];
+    pintarArte(); // limpa estilos aplicados diretamente no elemento
+    selecionarElemento(Ajuste.eid);
+    salvarNoHistorico();
+    return;
   }
   repintarElementoSelecionado();
   limparAjusteVazio();
@@ -877,6 +1060,15 @@ function iniciarEdicaoVisual() {
   $('#aj-fonte-mais').addEventListener('click', () => mudarAjuste({ fonteDelta: 4 }));
   $('#aj-escala-menos').addEventListener('click', () => mudarAjuste({ escalaFator: 1 / 1.1 }));
   $('#aj-escala-mais').addEventListener('click', () => mudarAjuste({ escalaFator: 1.1 }));
+  $('#aj-rot-menos').addEventListener('click', () => mudarAjuste({ rotDelta: -5 }));
+  $('#aj-rot-mais').addEventListener('click', () => mudarAjuste({ rotDelta: 5 }));
+  $('#aj-opac-menos').addEventListener('click', () => mudarAjuste({ opacDelta: -0.15 }));
+  $('#aj-opac-mais').addEventListener('click', () => mudarAjuste({ opacDelta: 0.15 }));
+  $('#aj-tras').addEventListener('click', () => mudarAjuste({ zDelta: -10 }));
+  $('#aj-frente').addEventListener('click', () => mudarAjuste({ zDelta: 10 }));
+  $('#aj-alinhar').addEventListener('click', () => mudarAjuste({ cicloAlinhar: true }));
+  $('#aj-negrito').addEventListener('click', () => mudarAjuste({ cicloPeso: true }));
+  $('#aj-italico').addEventListener('click', () => mudarAjuste({ alternarItalico: true }));
   $('#aj-cor').addEventListener('input', (evento) => mudarAjuste({ cor: evento.target.value }));
   $('#aj-ocultar').addEventListener('click', () => mudarAjuste({ alternarOculto: true }));
   $('#aj-zerar').addEventListener('click', () => mudarAjuste({ zerar: true }));
@@ -918,9 +1110,10 @@ function pintarArte() {
 function montarAbasVariacoes() {
   const caixa = $('#variacoes');
   caixa.innerHTML = '';
+  const compacto = Estado.arte.variacoes.length > 6;
   Estado.arte.variacoes.forEach((_, indice) => {
     const aba = el('button', 'aba-variacao' + (indice === Estado.arte.variacaoAtiva ? ' ativa' : ''),
-      'Variação ' + (indice + 1));
+      compacto ? String(indice + 1) : 'Arte ' + (indice + 1));
     aba.type = 'button';
     aba.addEventListener('click', () => {
       Estado.arte.variacaoAtiva = indice;
@@ -1004,7 +1197,8 @@ async function baixarAtual() {
   try {
     await Exportador.baixarPNG(html, Modelos.css, arquivo);
     status.textContent = 'PNG baixado ✓';
-    contarEvento('exportacao');
+    contarEvento('exportacao', 1, segundosDaArte());
+    salvarNoHistorico();
   } catch (erro) {
     status.textContent = '';
     avisar('Erro ao exportar: ' + erro.message, true);
@@ -1038,7 +1232,8 @@ async function baixarTodas() {
       await new Promise((r) => setTimeout(r, 350));
     }
     status.textContent = baixadas + ' PNGs gerados ✓ — se o navegador pedir, permita múltiplos downloads';
-    contarEvento('exportacao', baixadas);
+    contarEvento('exportacao', baixadas, segundosDaArte());
+    salvarNoHistorico();
   } catch (erro) {
     avisar('Erro ao exportar (baixei ' + baixadas + ' de ' + trabalhos.length + '): ' + erro.message, true);
     status.textContent = '';
@@ -1280,15 +1475,21 @@ function pintarPreviaEditorDebounce() {
   previaTimer = setTimeout(pintarPreviaEditor, 300);
 }
 
-async function replicarComIA() {
+async function replicarComIA(refinar = false) {
   if (!Editor.imagens.length) {
     avisar('Adicione ao menos uma imagem do modelo que você quer replicar.', true);
     return;
   }
-  const botao = $('#botao-replicar');
+  if (refinar && !$('#editor-html').value.trim()) {
+    avisar('Para refinar, primeiro replique ou cole o HTML do modelo.', true);
+    return;
+  }
+  const botao = refinar ? $('#botao-refinar') : $('#botao-replicar');
   const status = $('#editor-status');
   botao.disabled = true;
-  status.textContent = 'A IA está redesenhando seu modelo… isso leva até 1 minuto.';
+  status.textContent = refinar
+    ? 'A IA está comparando com a referência e corrigindo… até 1 minuto.'
+    : 'A IA está redesenhando seu modelo… isso leva até 1 minuto.';
   try {
     const resposta = await fetch('api/replicar', {
       method: 'POST',
@@ -1297,12 +1498,14 @@ async function replicarComIA() {
         designer: Estado.designer.nome,
         pin: Estado.pin,
         imagens: Editor.imagens,
+        htmlAtual: refinar ? $('#editor-html').value : undefined,
         observacoes: $('#editor-observacoes').value.trim(),
       }),
     });
     const dados = await resposta.json().catch(() => ({}));
     if (!resposta.ok) throw new Error(dados.erro || ('Falha na IA (HTTP ' + resposta.status + ')'));
     $('#editor-html').value = dados.html || '';
+    if (dados.notas) avisar('Aviso da IA: ' + dados.notas);
     Editor.slots = (dados.slots || []).map((s) => ({
       key: s.key,
       rotulo: s.rotulo || s.key,
@@ -1314,7 +1517,9 @@ async function replicarComIA() {
     }));
     sincronizarSlotsEditor();
     pintarPreviaEditor();
-    status.textContent = 'Layout replicado ✓ — confira a prévia e ajuste o que precisar';
+    status.textContent = refinar
+      ? 'Refinado ✓ — compare a prévia com a referência; dá para refinar de novo'
+      : 'Layout replicado ✓ — confira a prévia; se algo divergir, use o Refinar';
   } catch (erro) {
     status.textContent = '';
     avisar('Não consegui replicar: ' + erro.message, true);
@@ -1437,7 +1642,95 @@ function montarTabelaAcessos(equipe) {
   }
 }
 
-function montarTabelaProdutividade(linhas) {
+function fmtDuracao(segundos) {
+  if (!segundos) return '—';
+  const h = Math.floor(segundos / 3600);
+  const m = Math.round((segundos % 3600) / 60);
+  if (h) return h + 'h' + String(m).padStart(2, '0');
+  if (m) return m + ' min';
+  return Math.round(segundos) + ' s';
+}
+
+// cores das séries validadas para o fundo escuro (identidade + CVD)
+const COR_SERIE_ARTES = '#E0439B';
+const COR_SERIE_PNGS = '#AD8A19';
+
+// barras agrupadas por dia: artes iniciadas × PNGs exportados (14 dias)
+function graficoBarrasDias(serie) {
+  const larg = 720, alt = 210, margEsq = 34, margBase = 26, margTopo = 10;
+  const util = larg - margEsq - 8;
+  const altura = alt - margBase - margTopo;
+  const maximo = Math.max(1, ...serie.map((d) => Math.max(d.arte, d.exportacao)));
+  const slot = util / serie.length;
+  const larguraBarra = Math.min(16, (slot - 8) / 2);
+  const y = (v) => margTopo + altura * (1 - v / maximo);
+
+  let barras = '';
+  serie.forEach((dia, i) => {
+    const x0 = margEsq + i * slot + (slot - (larguraBarra * 2 + 2)) / 2;
+    const rotulo = dia.dia.slice(8, 10) + '/' + dia.dia.slice(5, 7);
+    for (const [serieNome, valor, cor, dx] of [
+      ['Artes', dia.arte, COR_SERIE_ARTES, 0],
+      ['PNGs', dia.exportacao, COR_SERIE_PNGS, larguraBarra + 2],
+    ]) {
+      const h = Math.max(valor ? 3 : 0, altura * (valor / maximo));
+      barras += `<rect x="${(x0 + dx).toFixed(1)}" y="${(alt - margBase - h).toFixed(1)}"
+        width="${larguraBarra.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${cor}">
+        <title>${rotulo} · ${serieNome}: ${valor}</title></rect>`;
+    }
+    if (i % 2 === 0) {
+      barras += `<text x="${(margEsq + i * slot + slot / 2).toFixed(1)}" y="${alt - 8}"
+        text-anchor="middle" font-size="11" fill="#B3A3B0">${rotulo}</text>`;
+    }
+  });
+
+  let grade = '';
+  for (const fracao of [0.5, 1]) {
+    const valor = Math.round(maximo * fracao);
+    grade += `<line x1="${margEsq}" x2="${larg - 6}" y1="${y(valor).toFixed(1)}" y2="${y(valor).toFixed(1)}"
+      stroke="#322232" stroke-width="1"/>
+      <text x="${margEsq - 6}" y="${(y(valor) + 4).toFixed(1)}" text-anchor="end"
+        font-size="11" fill="#B3A3B0">${valor}</text>`;
+  }
+  return `<div class="grafico-legenda">
+      <span><i style="background:${COR_SERIE_ARTES}"></i>Artes iniciadas</span>
+      <span><i style="background:${COR_SERIE_PNGS}"></i>PNGs exportados</span>
+      <span class="grafico-titulo">últimos 14 dias</span>
+    </div>
+    <svg viewBox="0 0 ${larg} ${alt}" role="img" aria-label="Produção por dia nos últimos 14 dias"
+      style="width:100%;height:auto">
+      ${grade}
+      <line x1="${margEsq}" x2="${larg - 6}" y1="${alt - margBase}" y2="${alt - margBase}"
+        stroke="#3A2A3A" stroke-width="1"/>
+      ${barras}
+    </svg>`;
+}
+
+function montarPainelProdutividade(dados) {
+  const linhas = dados.linhas || [];
+  const serie = dados.serie || [];
+  const total = linhas.reduce((acc, l) => {
+    for (const chave of ['arte', 'exportacao', 'geracao', 'segundos', 'artesComTempo']) {
+      acc[chave] += l.d30[chave] || 0;
+    }
+    return acc;
+  }, { arte: 0, exportacao: 0, geracao: 0, segundos: 0, artesComTempo: 0 });
+  const tempoMedio = total.artesComTempo ? total.segundos / total.artesComTempo : 0;
+
+  $('#equipe-resumo').innerHTML = [
+    ['Artes (30d)', total.arte],
+    ['PNGs exportados (30d)', total.exportacao],
+    ['Gerações de IA (30d)', total.geracao],
+    ['Tempo médio por arte', fmtDuracao(tempoMedio)],
+    ['Tempo total (30d)', fmtDuracao(total.segundos)],
+  ].map(([rotulo, valor]) =>
+    `<div class="tile"><span class="tile-valor">${valor}</span><span class="tile-rotulo">${rotulo}</span></div>`
+  ).join('');
+
+  $('#equipe-grafico').innerHTML = serie.some((d) => d.arte || d.exportacao)
+    ? graficoBarrasDias(serie)
+    : '<p class="historico-vazio">O gráfico aparece com os primeiros dias de produção.</p>';
+
   const caixa = $('#equipe-produtividade');
   caixa.innerHTML = '';
   if (!linhas.length) {
@@ -1447,12 +1740,15 @@ function montarTabelaProdutividade(linhas) {
   const tabela = el('div', 'tabela-produtividade');
   tabela.appendChild(el('div', 'linha-prod cabecalho',
     '<span>Designer</span><span>7d · Artes</span><span>7d · IA</span><span>7d · PNGs</span>' +
-    '<span>30d · Artes</span><span>30d · IA</span><span>30d · PNGs</span>'));
+    '<span>30d · Artes</span><span>30d · IA</span><span>30d · PNGs</span>' +
+    '<span>Tempo médio</span><span>Tempo total 30d</span>'));
   for (const linha of linhas) {
+    const medio = linha.d30.artesComTempo ? linha.d30.segundos / linha.d30.artesComTempo : 0;
     tabela.appendChild(el('div', 'linha-prod',
       `<strong>${esc(linha.nome)}</strong>` +
       `<span>${linha.d7.arte}</span><span>${linha.d7.geracao}</span><span>${linha.d7.exportacao}</span>` +
-      `<span>${linha.d30.arte}</span><span>${linha.d30.geracao}</span><span>${linha.d30.exportacao}</span>`));
+      `<span>${linha.d30.arte}</span><span>${linha.d30.geracao}</span><span>${linha.d30.exportacao}</span>` +
+      `<span>${fmtDuracao(medio)}</span><span>${fmtDuracao(linha.d30.segundos)}</span>`));
   }
   caixa.appendChild(tabela);
 }
@@ -1472,8 +1768,10 @@ async function montarTelaEquipe() {
   }
   try {
     const dados = await pedirAoServidor('api/estatisticas', {});
-    montarTabelaProdutividade(dados.linhas || []);
+    montarPainelProdutividade(dados);
   } catch (erro) {
+    $('#equipe-resumo').innerHTML = '';
+    $('#equipe-grafico').innerHTML = '';
     $('#equipe-produtividade').innerHTML =
       '<p class="historico-vazio">' + esc(erro.semKV
         ? 'A produtividade precisa do KV configurado no deploy (README).'
@@ -1522,6 +1820,7 @@ function iniciar() {
         montarSelecaoMarcas();
         montarCamposDeImagem();
         preencherFormularioPlano();
+        carregarBanco();
       }
       if (tela === 'estudio' && Estado.arte && Estado.arte.variacoes.length) {
         abrirEstudio(); // repinta com marca/imagens atuais: preview = PNG
@@ -1539,11 +1838,23 @@ function iniciar() {
     montarSelecaoMarcas();
     montarCamposDeImagem();
     preencherFormularioPlano();
+    carregarBanco();
     mostrarTela('plano');
   });
   $('#botao-nova-arte').addEventListener('click', () => { Estado.arte = null; mostrarTela('modelos'); });
   $('#botao-baixar').addEventListener('click', baixarAtual);
   $('#botao-baixar-todas').addEventListener('click', baixarTodas);
+
+  // banco de imagens do cliente
+  $('#banco-upload').addEventListener('change', async (evento) => {
+    const arquivos = [...(evento.target.files || [])];
+    evento.target.value = '';
+    if (arquivos.length) await enviarParaBanco(arquivos);
+  });
+  $('#banco-seletor-fechar').addEventListener('click', () => { $('#banco-seletor').hidden = true; });
+  $('#banco-seletor').addEventListener('click', (evento) => {
+    if (evento.target === $('#banco-seletor')) $('#banco-seletor').hidden = true;
+  });
 
   // editor de modelos próprios
   $('#editor-imagem').addEventListener('change', async (evento) => {
@@ -1559,7 +1870,8 @@ function iniciar() {
     montarMiniaturasReferencia();
   });
   $('#editor-html').addEventListener('input', () => { sincronizarSlotsEditor(); pintarPreviaEditorDebounce(); });
-  $('#botao-replicar').addEventListener('click', replicarComIA);
+  $('#botao-replicar').addEventListener('click', () => replicarComIA(false));
+  $('#botao-refinar').addEventListener('click', () => replicarComIA(true));
   $('#botao-editor-salvar').addEventListener('click', salvarModeloEditor);
   $('#botao-editor-cancelar').addEventListener('click', () => mostrarTela('modelos'));
   $('#botao-editor-excluir').addEventListener('click', excluirModeloEditor);

@@ -121,6 +121,9 @@
                    placeholder="Ex.: o preço fica no selo amarelo; a foto ocupa a metade de cima"/></label>
           <div class="linha-campos" style="margin-top:10px">
             <button class="botao botao-primario" id="botao-replicar" type="button">✦ Replicar layout com IA</button>
+            <button class="botao botao-secundario" id="botao-refinar" type="button"
+              title="Compara o HTML atual com as imagens e corrige o que estiver diferente">
+              🔁 Refinar (aproximar da referência)</button>
             <span class="exportar-status" id="editor-status"></span>
           </div>
         </div>
@@ -231,6 +234,33 @@
         <label class="campo"><span>Mensagem principal + observações (cole aqui o planejamento)</span>
           <textarea id="plano-texto" rows="6"
             placeholder="O que essa arte precisa dizer? Cole o planejamento completo do post: ângulo, gatilhos, frases obrigatórias, o que não pode faltar…"></textarea></label>
+        <div class="linha-campos" style="margin-top:4px">
+          <label class="campo"><span>Quantas artes gerar?</span>
+            <select id="plano-quantidade">
+              <option value="auto">Automático — 1 por criativo do planejamento</option>
+              <option value="1">1</option><option value="2">2</option>
+              <option value="3" selected>3</option><option value="4">4</option>
+              <option value="5">5</option><option value="6">6</option>
+              <option value="8">8</option><option value="10">10</option>
+              <option value="12">12</option><option value="15">15</option>
+              <option value="20">20</option><option value="24">24</option>
+            </select></label>
+          <p class="painel-dica" style="margin:0;align-self:center">No automático, a IA cria uma arte
+             para cada item do planejamento (CRIATIVO 1, CRIATIVO 2…), até 24.</p>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h3>Banco de imagens do cliente</h3>
+        <p class="painel-dica">Todas as fotos e elementos deste cliente, disponíveis para qualquer
+           arte — nos campos de imagem, use o botão <strong>“Do banco”</strong>.</p>
+        <p class="plano-status" id="banco-aviso" hidden></p>
+        <div id="banco-lista" class="ref-lista"></div>
+        <div class="linha-campos">
+          <label class="campo campo-crescer"><span>Enviar imagens (pode escolher várias)</span>
+            <input type="file" id="banco-upload" accept="image/*" multiple/></label>
+          <span class="exportar-status" id="banco-status"></span>
+        </div>
       </div>
 
       <div class="cartao" id="cartao-imagens" hidden>
@@ -266,6 +296,23 @@
             <button id="aj-escala-menos" type="button">▢−</button>
             <button id="aj-escala-mais" type="button">▢+</button>
           </span>
+          <span class="ajuste-grupo" title="Rotação (5°)">
+            <button id="aj-rot-menos" type="button">⟲</button>
+            <button id="aj-rot-mais" type="button">⟳</button>
+          </span>
+          <span class="ajuste-grupo" title="Transparência">
+            <button id="aj-opac-menos" type="button">◔−</button>
+            <button id="aj-opac-mais" type="button">◕+</button>
+          </span>
+          <span class="ajuste-grupo" title="Camada (frente/trás)">
+            <button id="aj-tras" type="button">⬇</button>
+            <button id="aj-frente" type="button">⬆</button>
+          </span>
+          <span class="ajuste-grupo" title="Estilo do texto">
+            <button id="aj-alinhar" type="button" title="Alinhamento (esq/centro/dir)">⇤⇥</button>
+            <button id="aj-negrito" type="button" title="Peso da fonte (negro/negrito/fino)"><b>B</b></button>
+            <button id="aj-italico" type="button" title="Itálico"><i>I</i></button>
+          </span>
           <input type="color" id="aj-cor" title="Cor do texto"/>
           <button class="ajuste-acao" id="aj-ocultar" type="button">Ocultar</button>
           <button class="ajuste-acao" id="aj-zerar" type="button" title="Desfaz os ajustes deste elemento">↺</button>
@@ -278,7 +325,7 @@
         </div>
         <div class="estudio-exportar">
           <button class="botao botao-primario" id="botao-baixar" type="button">⬇ Baixar PNG (1080×1350)</button>
-          <button class="botao botao-secundario" id="botao-baixar-todas" type="button">Baixar as 3 variações</button>
+          <button class="botao botao-secundario" id="botao-baixar-todas" type="button">Baixar todas as artes</button>
           <span class="exportar-status" id="exportar-status"></span>
         </div>
       </div>
@@ -322,8 +369,10 @@
       </div>
       <div class="cartao">
         <h3>Produtividade</h3>
-        <p class="painel-dica">Artes iniciadas, gerações de texto com IA e PNGs exportados —
-           últimos <strong>7 dias</strong> e últimos <strong>30 dias</strong>.</p>
+        <p class="painel-dica">Artes iniciadas, gerações de texto com IA, PNGs exportados e o
+           tempo de produção (da criação da arte à primeira exportação).</p>
+        <div id="equipe-resumo" class="resumo-tiles"></div>
+        <div id="equipe-grafico"></div>
         <div id="equipe-produtividade"></div>
       </div>
     </div>
@@ -341,6 +390,17 @@
 </main>
 
 <div class="aviso" id="aviso" hidden></div>
+
+<!-- seletor do banco de imagens (abre sobre a tela) -->
+<div class="seletor-fundo" id="banco-seletor" hidden>
+  <div class="seletor-caixa">
+    <div class="seletor-topo">
+      <h3>Escolher do banco de imagens</h3>
+      <button class="botao botao-fantasma botao-mini" id="banco-seletor-fechar" type="button">✕ Fechar</button>
+    </div>
+    <div class="ref-lista" id="banco-seletor-lista"></div>
+  </div>
+</div>
 
 <script src="templates.js"></script>
 <script src="export.js"></script>
