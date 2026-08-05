@@ -68,21 +68,24 @@ const CONFIG = {
                                     // recepção — o código em si não fica no fonte;
                                     // para trocar, veja SEGURANCA.md
   HORARIOS: {
-    diasSemana: [1, 2, 3, 4, 5, 6],  // 0=dom, 1=seg … 6=sáb
-    grade: ['08:00', '09:15', '10:30', '12:00', '13:30', '14:45', '16:00', '17:15', '18:30'],
-    ultimaSabado: '16:00',           // sábado: última sessão às 16h
-    duracaoMin: 60,                  // duração de cada sessão
+    duracaoMin: 60,   // duração de cada sessão
+    vagas: {          // vagas por horário em cada dia (1=seg … 6=sáb)
+      1: { '08:00': 3, /* … */ '18:30': 3 },
+      // veja a tabela completa no app.js — o número é quantas clientes
+      // podem agendar no MESMO horário naquele dia
+    },
   },
-  CAPACIDADE_POR_HORARIO: 1,        // atendimentos ao mesmo tempo
   FALTA_CONSOME: false,             // falta desconta sessão do pacote?
   SYNC_URL: '',                     // sincronização entre aparelhos (opcional)
 };
 ```
 
-Grade de horários configurada: **08h · 09h15 · 10h30 · 12h · 13h30 ·
-14h45 · 16h · 17h15 · 18h30** (segunda a sexta; no sábado a última sessão
-é às 16h). O app bloqueia automaticamente sobreposição de sessões. No
-primeiro acesso a cliente informa nome, **e-mail e data de nascimento**.
+Grade configurada: **08h · 09h15 · 10h30 · 12h · 13h30 · 14h45 · 16h ·
+17h15 · 18h30** de segunda a sexta (sábado: 08h–10h30 e 13h30–16h, sem o
+horário de 12h). Cada horário tem um número de **vagas simultâneas** por
+dia (3 ou 4, conforme a equipe do dia) — o horário só some do app quando
+todas as vagas daquele dia/horário estiverem tomadas. No primeiro acesso
+a cliente informa nome, **e-mail e data de nascimento**.
 
 ## Como publicar (GitHub Pages)
 
