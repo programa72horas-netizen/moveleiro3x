@@ -129,7 +129,10 @@
         </div>
 
         <div class="cartao">
-          <h3>HTML do layout (1080×1350)</h3>
+          <h3>Layouts do modelo (1080×1350)</h3>
+          <p class="painel-dica">Cada imagem de referência vira um layout — as artes geradas
+             se revezam entre eles. Edite o HTML de cada layout nas abas.</p>
+          <div class="variacoes" id="editor-layout-abas" style="margin-bottom:10px"></div>
           <label class="campo">
             <textarea id="editor-html" rows="14" spellcheck="false"
               placeholder='&lt;div class="a72" style="background:#111;color:#fff"&gt; … {{titulo}} … &lt;/div&gt;'></textarea>
@@ -182,11 +185,10 @@
           <div class="linha-campos">
             <label class="campo campo-crescer"><span>Nome da loja</span>
               <input id="marca-nome" maxlength="40" placeholder="Ex.: Lar Móveis"/></label>
-            <label class="campo"><span>Cor principal</span>
-              <input type="color" id="marca-cor1" value="#E3242B"/></label>
-            <label class="campo"><span>Cor de apoio</span>
-              <input type="color" id="marca-cor2" value="#FFC400"/></label>
+            <input type="hidden" id="marca-cor1" value="#E3242B"/>
+            <input type="hidden" id="marca-cor2" value="#FFC400"/>
           </div>
+          <p class="painel-dica">As cores da marca são extraídas automaticamente da logo.</p>
           <div class="linha-campos">
             <label class="campo campo-crescer"><span>WhatsApp</span>
               <input id="marca-whats" maxlength="20" placeholder="(48) 99999-9999"/></label>

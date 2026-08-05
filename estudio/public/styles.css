@@ -222,6 +222,8 @@ input, select, textarea { font-family: inherit; font-size: 15px; }
 .painel-dica { color: var(--texto-2); font-size: 13px; margin: 8px 0 16px; }
 
 #campos-slots .campo { margin-bottom: 14px; }
+.seletor-layout .variacoes { margin: 6px 0 4px; }
+.seletor-layout .aba-variacao { padding: 7px 14px; font-size: 13px; }
 #campos-slots .contador { align-self: flex-end; font-size: 11px; color: var(--texto-2); }
 #campos-slots .contador.estouro { color: #ff6b71; font-weight: 700; }
 

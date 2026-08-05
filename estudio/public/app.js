@@ -55,6 +55,7 @@ function novaArte(modeloId) {
     plano: { objetivo: 'vender', publico: '', oferta: '', preco: '', prazo: '', texto: '', quantidade: '3' },
     imagens: {},           // slotKey → dataURL
     variacoes: [],         // [{ slotKey: texto }]
+    layoutsPorVariacao: {}, // variação → índice do layout do modelo
     variacaoAtiva: 0,
     ajustes: {},           // ajustes visuais por variação: { indice: { eid: {...} } }
     registrada: false,     // já contou na produtividade?
@@ -199,11 +200,18 @@ function iniciarMarcas() {
     const arquivo = e.target.files && e.target.files[0];
     if (!arquivo) return;
     logoProcessando = redimensionarImagem(arquivo, 900)
-      .then((dataUrl) => {
+      .then(async (dataUrl) => {
         const previa = $('#marca-logo-previa');
         previa.src = dataUrl;
         previa.hidden = false;
         previa.dataset.logo = dataUrl;
+        // as cores da marca vêm da própria logo
+        const cores = await extrairCoresDaLogo(dataUrl);
+        if (cores) {
+          $('#marca-cor1').value = cores.cor1;
+          $('#marca-cor2').value = cores.cor2;
+          avisar('Cores extraídas da logo: ' + cores.cor1 + ' e ' + cores.cor2 + '.');
+        }
       })
       .catch(() => avisar('Não consegui ler esse logo. Tente outro arquivo.', true))
       .finally(() => { logoProcessando = null; });
@@ -258,6 +266,53 @@ function redimensionarImagem(arquivo, ladoMax = 1600) {
     };
     img.onerror = () => { URL.revokeObjectURL(url); rejeitar(new Error('Imagem inválida')); };
     img.src = url;
+  });
+}
+
+// as cores da marca saem direto da logo: acha as duas tintas dominantes
+// (ignorando branco, preto e cinzas) — sem seletor manual de cor
+function extrairCoresDaLogo(dataUrl) {
+  return new Promise((resolver) => {
+    const img = new Image();
+    img.onload = () => {
+      const lado = 72;
+      const tela = document.createElement('canvas');
+      tela.width = tela.height = lado;
+      const ctx = tela.getContext('2d');
+      ctx.drawImage(img, 0, 0, lado, lado);
+      const dados = ctx.getImageData(0, 0, lado, lado).data;
+      const baldes = {}; // hue(15°)+faixa de luz → contagem ponderada por saturação
+      for (let i = 0; i < dados.length; i += 4) {
+        const r = dados[i] / 255, g = dados[i + 1] / 255, b = dados[i + 2] / 255, a = dados[i + 3];
+        if (a < 140) continue;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const luz = (max + min) / 2;
+        const sat = max === min ? 0 : (max - min) / (1 - Math.abs(2 * luz - 1));
+        if (luz > 0.93 || luz < 0.07 || sat < 0.25) continue; // branco/preto/cinza
+        let matiz = 0;
+        if (max === r) matiz = ((g - b) / (max - min)) % 6;
+        else if (max === g) matiz = (b - r) / (max - min) + 2;
+        else matiz = (r - g) / (max - min) + 4;
+        matiz = Math.round(((matiz * 60) + 360) % 360);
+        const chave = Math.round(matiz / 15) * 15;
+        const balde = baldes[chave] = baldes[chave] || { peso: 0, r: 0, g: 0, b: 0, n: 0 };
+        balde.peso += sat;
+        balde.r += dados[i]; balde.g += dados[i + 1]; balde.b += dados[i + 2]; balde.n++;
+      }
+      const ordenados = Object.entries(baldes).sort((a, b) => b[1].peso - a[1].peso);
+      const paraHex = (balde) => '#' + [balde.r, balde.g, balde.b]
+        .map((soma) => Math.round(soma / balde.n).toString(16).padStart(2, '0')).join('');
+      if (!ordenados.length) { resolver(null); return; }
+      const cor1 = paraHex(ordenados[0][1]);
+      // a cor de apoio precisa ser de outra família de matiz
+      const distinta = ordenados.find(([matiz]) => {
+        const delta = Math.abs(Number(matiz) - Number(ordenados[0][0]));
+        return Math.min(delta, 360 - delta) >= 40;
+      });
+      resolver({ cor1, cor2: distinta ? paraHex(distinta[1]) : '#fdd90d' });
+    };
+    img.onerror = () => resolver(null);
+    img.src = dataUrl;
   });
 }
 
@@ -698,6 +753,12 @@ function aplicarVariacoes(variacoes) {
   if (!Estado.arte.variacoes.length) {
     Estado.arte.variacoes = [Modelos.exemplos(modelo)];
   }
+  // as artes se revezam entre os layouts do modelo (1 por referência enviada)
+  const totalLayouts = (modelo.layouts || ['']).length || 1;
+  Estado.arte.layoutsPorVariacao = {};
+  Estado.arte.variacoes.forEach((_, indice) => {
+    Estado.arte.layoutsPorVariacao[indice] = indice % totalLayouts;
+  });
   Estado.arte.variacaoAtiva = 0;
   Estado.arte.ajustes = {}; // textos novos zeram os ajustes visuais
 }
@@ -863,10 +924,17 @@ function htmlComAjustes(html, mapa) {
   return caixa.innerHTML;
 }
 
+function layoutDaVariacao(indice) {
+  const modelo = Modelos.porId(Estado.arte.modeloId);
+  const total = (modelo.layouts || ['']).length || 1;
+  const marcado = (Estado.arte.layoutsPorVariacao || {})[indice];
+  return Math.min(marcado ?? (indice % total), total - 1);
+}
+
 function htmlDaVariacao(indice) {
   const modelo = Modelos.porId(Estado.arte.modeloId);
   const valores = { ...(Estado.arte.variacoes[indice] || {}), ...Estado.arte.imagens };
-  const html = modelo.render(valores, marcaAtual());
+  const html = modelo.render(valores, marcaAtual(), layoutDaVariacao(indice));
   return htmlComAjustes(html, (Estado.arte.ajustes || {})[indice]);
 }
 
@@ -1097,7 +1165,8 @@ function pintarArte() {
   // elemento sabe seu transform original e os ajustes nunca se acumulam
   const modelo = Modelos.porId(Estado.arte.modeloId);
   const valores = { ...valoresAtuais(), ...Estado.arte.imagens };
-  $('#palco').innerHTML = `<style>${Modelos.css}</style>` + modelo.render(valores, marcaAtual());
+  $('#palco').innerHTML = `<style>${Modelos.css}</style>` +
+    modelo.render(valores, marcaAtual(), layoutDaVariacao(Estado.arte.variacaoAtiva));
   ajustarEscalaPalco();
   prepararEdicaoVisual();
   const mapa = ajustesDaVariacao(Estado.arte.variacaoAtiva);
@@ -1132,6 +1201,31 @@ function montarCamposSlots() {
   const caixa = $('#campos-slots');
   caixa.innerHTML = '';
   const valores = valoresAtuais();
+
+  // modelos com vários layouts: cada arte pode trocar o seu
+  if (modelo.layouts && modelo.layouts.length > 1) {
+    const linha = el('div', 'campo seletor-layout');
+    linha.innerHTML = '<span>Layout desta arte</span>';
+    const pills = el('div', 'variacoes');
+    const atual = layoutDaVariacao(Estado.arte.variacaoAtiva);
+    modelo.layouts.forEach((_, indice) => {
+      const pill = el('button', 'aba-variacao' + (indice === atual ? ' ativa' : ''), String(indice + 1));
+      pill.type = 'button';
+      pill.addEventListener('click', () => {
+        if (indice === layoutDaVariacao(Estado.arte.variacaoAtiva)) return;
+        Estado.arte.layoutsPorVariacao[Estado.arte.variacaoAtiva] = indice;
+        // layout diferente = elementos diferentes: os ajustes finos desta arte zeram
+        delete Estado.arte.ajustes[Estado.arte.variacaoAtiva];
+        selecionarElemento(null);
+        montarCamposSlots();
+        pintarArte();
+        salvarNoHistorico();
+      });
+      pills.appendChild(pill);
+    });
+    linha.appendChild(pills);
+    caixa.appendChild(linha);
+  }
 
   for (const slot of Modelos.slotsDeTexto(modelo)) {
     const campo = el('label', 'campo');
@@ -1320,25 +1414,80 @@ const Editor = {
   idEmEdicao: null,   // null = modelo novo
   slots: [],          // metadados dos campos detectados no HTML
   imagens: [],        // referências (dataURL) para a replicação por IA
+  layouts: [''],      // um HTML por layout do modelo
+  layoutAtivo: 0,
 };
 
 function abrirEditor(modelo) {
   Editor.idEmEdicao = modelo ? modelo.id : null;
   Editor.slots = modelo ? modelo.slots.map((s) => ({ ...s })) : [];
   Editor.imagens = [];
+  Editor.layouts = modelo ? [...(modelo.layouts || [modelo.html || ''])] : [''];
+  Editor.layoutAtivo = 0;
   $('#editor-titulo').textContent = modelo ? 'Editar: ' + modelo.nome : 'Novo modelo';
   $('#editor-nome').value = modelo ? modelo.nome : '';
   $('#editor-fase').value = modelo ? String(modelo.fase) : '0';
   $('#editor-resumo').value = modelo ? modelo.resumo : '';
-  $('#editor-html').value = modelo ? modelo.html : '';
+  $('#editor-html').value = Editor.layouts[0];
   $('#editor-imagem').value = '';
   $('#editor-observacoes').value = '';
   $('#editor-status').textContent = '';
   $('#botao-editor-excluir').hidden = !modelo;
   montarMiniaturasReferencia();
+  montarAbasLayoutsEditor();
   sincronizarSlotsEditor();
   mostrarTela('editor');
   pintarPreviaEditor();
+}
+
+function guardarLayoutAtivo() {
+  Editor.layouts[Editor.layoutAtivo] = $('#editor-html').value;
+}
+
+function montarAbasLayoutsEditor() {
+  const caixa = $('#editor-layout-abas');
+  caixa.innerHTML = '';
+  Editor.layouts.forEach((_, indice) => {
+    const aba = el('button', 'aba-variacao' + (indice === Editor.layoutAtivo ? ' ativa' : ''),
+      'Layout ' + (indice + 1));
+    aba.type = 'button';
+    aba.addEventListener('click', () => {
+      guardarLayoutAtivo();
+      Editor.layoutAtivo = indice;
+      $('#editor-html').value = Editor.layouts[indice];
+      montarAbasLayoutsEditor();
+      pintarPreviaEditor();
+    });
+    caixa.appendChild(aba);
+  });
+  if (Editor.layouts.length < 6) {
+    const mais = el('button', 'aba-variacao', '+ layout');
+    mais.type = 'button';
+    mais.title = 'Adicionar mais um layout a este modelo';
+    mais.addEventListener('click', () => {
+      guardarLayoutAtivo();
+      Editor.layouts.push('');
+      Editor.layoutAtivo = Editor.layouts.length - 1;
+      $('#editor-html').value = '';
+      montarAbasLayoutsEditor();
+      pintarPreviaEditor();
+    });
+    caixa.appendChild(mais);
+  }
+  if (Editor.layouts.length > 1) {
+    const remover = el('button', 'aba-variacao', '× remover este');
+    remover.type = 'button';
+    remover.addEventListener('click', () => {
+      if (!window.confirm('Remover o layout ' + (Editor.layoutAtivo + 1) + ' deste modelo?')) return;
+      Editor.layouts.splice(Editor.layoutAtivo, 1);
+      Editor.layoutAtivo = Math.max(0, Editor.layoutAtivo - 1);
+      $('#editor-html').value = Editor.layouts[Editor.layoutAtivo];
+      montarAbasLayoutsEditor();
+      sincronizarSlotsEditor();
+      pintarPreviaEditor();
+    });
+    caixa.appendChild(remover);
+  }
 }
 
 function montarMiniaturasReferencia() {
@@ -1362,10 +1511,11 @@ function montarMiniaturasReferencia() {
   });
 }
 
-// mantém a lista de campos alinhada aos marcadores {{...}} do HTML,
-// preservando os ajustes já feitos em campos que continuam existindo
+// mantém a lista de campos alinhada aos marcadores {{...}} de TODOS os
+// layouts, preservando os ajustes já feitos em campos que continuam existindo
 function sincronizarSlotsEditor() {
-  const chaves = Modelos.chavesDoHtml($('#editor-html').value);
+  guardarLayoutAtivo();
+  const chaves = Modelos.chavesDoHtml(Editor.layouts);
   Editor.slots = chaves.map((chave) => {
     const existente = Editor.slots.find((s) => s.key === chave);
     if (existente) return existente;
@@ -1437,6 +1587,8 @@ function montarTabelaSlots() {
 }
 
 function defDoEditor() {
+  guardarLayoutAtivo();
+  const layouts = Editor.layouts.filter((l) => l.trim());
   return {
     id: Editor.idEmEdicao || ('meu-' + ($('#editor-nome').value.trim().toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -1444,7 +1596,8 @@ function defDoEditor() {
     fase: Number($('#editor-fase').value) || 0,
     nome: $('#editor-nome').value.trim(),
     resumo: $('#editor-resumo').value.trim(),
-    html: $('#editor-html').value,
+    html: layouts[0] || '',
+    layouts,
     slots: Editor.slots.map((s) => ({ ...s })),
   };
 }
@@ -1461,7 +1614,9 @@ function pintarPreviaEditor() {
   }
   const compilado = Modelos.compilarPersonalizado(def);
   const marca = marcaAtual() || CONFIG.MARCA_PADRAO;
-  palco.innerHTML = `<style>${Modelos.css}</style>` + compilado.render(Modelos.exemplos(compilado), marca);
+  const indice = Math.min(Editor.layoutAtivo, compilado.layouts.length - 1);
+  palco.innerHTML = `<style>${Modelos.css}</style>` +
+    compilado.render(Modelos.exemplos(compilado), marca, Math.max(0, indice));
   const moldura = caixa.closest('.palco-moldura');
   const fator = Math.min(1, (moldura.clientWidth - 36) / 1080);
   caixa.style.width = Math.round(1080 * fator) + 'px';
@@ -1489,7 +1644,8 @@ async function replicarComIA(refinar = false) {
   botao.disabled = true;
   status.textContent = refinar
     ? 'A IA está comparando com a referência e corrigindo… até 1 minuto.'
-    : 'A IA está redesenhando seu modelo… isso leva até 1 minuto.';
+    : 'A IA está recriando ' + Editor.imagens.length + ' layout(s) com refinamento automático… ' +
+      'isso pode levar 2–3 minutos.';
   try {
     const resposta = await fetch('api/replicar', {
       method: 'POST',
@@ -1504,7 +1660,18 @@ async function replicarComIA(refinar = false) {
     });
     const dados = await resposta.json().catch(() => ({}));
     if (!resposta.ok) throw new Error(dados.erro || ('Falha na IA (HTTP ' + resposta.status + ')'));
-    $('#editor-html').value = dados.html || '';
+    const layoutsNovos = Array.isArray(dados.layouts) && dados.layouts.length
+      ? dados.layouts.map((l) => l.html || '')
+      : [dados.html || ''];
+    if (refinar) {
+      // o refino corrige apenas o layout que está aberto no editor
+      Editor.layouts[Editor.layoutAtivo] = layoutsNovos[0];
+    } else {
+      Editor.layouts = layoutsNovos;
+      Editor.layoutAtivo = 0;
+    }
+    $('#editor-html').value = Editor.layouts[Editor.layoutAtivo];
+    montarAbasLayoutsEditor();
     if (dados.notas) avisar('Aviso da IA: ' + dados.notas);
     Editor.slots = (dados.slots || []).map((s) => ({
       key: s.key,

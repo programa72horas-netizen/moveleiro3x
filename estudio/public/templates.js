@@ -605,24 +605,32 @@ const MARCADOR = /\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g;
 
 function chavesDoHtml(html) {
   const chaves = [];
-  for (const m of String(html || '').matchAll(MARCADOR)) {
-    if (!m[1].startsWith('marca') && !chaves.includes(m[1])) chaves.push(m[1]);
+  const fontes = Array.isArray(html) ? html : [html];
+  for (const fonte of fontes) {
+    for (const m of String(fonte || '').matchAll(MARCADOR)) {
+      if (!m[1].startsWith('marca') && !chaves.includes(m[1])) chaves.push(m[1]);
+    }
   }
   return chaves;
 }
 
 function compilarPersonalizado(def) {
   const slots = Array.isArray(def.slots) ? def.slots : [];
+  // um modelo pode ter vários layouts (um por imagem de referência);
+  // as artes geradas se revezam entre eles
+  const layouts = (Array.isArray(def.layouts) && def.layouts.length
+    ? def.layouts : [def.html || '']).map(String);
   return {
     id: def.id,
     fase: [0, 1, 2, 3].includes(def.fase) ? def.fase : 0,
     nome: def.nome || 'Modelo sem nome',
     resumo: def.resumo || 'Modelo personalizado.',
-    html: def.html || '',
+    html: layouts[0],
+    layouts,
     origem: def.origem || 'local',
     personalizado: true,
     slots,
-    render(s, marca) {
+    render(s, marca, indiceLayout = 0) {
       const daMarca = {
         marcaNome: Fmt.esc(marca.nome || 'SUA LOJA'),
         marcaCor1: Fmt.hex(marca.corPrimaria, '#E3242B'),
@@ -631,7 +639,8 @@ function compilarPersonalizado(def) {
         marcaWhatsapp: Fmt.esc(marca.whatsapp || ''),
         marcaEndereco: Fmt.esc(marca.endereco || ''),
       };
-      const html = String(def.html || '').replace(MARCADOR, (tudo, chave) => {
+      const base = layouts[indiceLayout] ?? layouts[0];
+      const html = base.replace(MARCADOR, (tudo, chave) => {
         if (chave in daMarca) return daMarca[chave];
         const slot = slots.find((x) => x.key === chave);
         if (!slot) return '';

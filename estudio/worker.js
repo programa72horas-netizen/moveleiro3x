@@ -267,6 +267,12 @@ function validarModeloPersonalizado(modelo) {
   if (typeof modelo.nome !== 'string' || !modelo.nome.trim()) return 'Dê um nome ao modelo.';
   if (typeof modelo.html !== 'string' || !modelo.html.trim()) return 'O modelo está sem HTML.';
   if (modelo.html.length > 300000) return 'HTML grande demais (máx. 300 KB).';
+  if (modelo.layouts !== undefined) {
+    if (!Array.isArray(modelo.layouts) || modelo.layouts.length > 6) return 'O modelo aceita até 6 layouts.';
+    for (const layout of modelo.layouts) {
+      if (typeof layout !== 'string' || layout.length > 300000) return 'Um dos layouts é inválido ou grande demais.';
+    }
+  }
   if (!Array.isArray(modelo.slots) || modelo.slots.length > 24) return 'Campos do modelo inválidos.';
   for (const s of modelo.slots) {
     if (!s || typeof s.key !== 'string' || !/^[a-zA-Z][a-zA-Z0-9]*$/.test(s.key)) return 'Campo com nome inválido.';
@@ -311,6 +317,9 @@ async function tratarModelos(pedido, env) {
     nome: String(corpo.modelo.nome).slice(0, 60),
     resumo: String(corpo.modelo.resumo || '').slice(0, 160),
     html: corpo.modelo.html,
+    layouts: Array.isArray(corpo.modelo.layouts) && corpo.modelo.layouts.length
+      ? corpo.modelo.layouts.filter((l) => typeof l === 'string' && l.trim())
+      : [corpo.modelo.html],
     slots: corpo.modelo.slots.map((s) => ({
       key: s.key,
       rotulo: String(s.rotulo || s.key).slice(0, 80),
@@ -592,29 +601,13 @@ REGRAS OBRIGATÓRIAS:
    (texto/imagem), multilinha e o texto de exemplo vindo da referência — e o
    campo "notas" com qualquer aviso importante para a equipe.`;
 
-  const refinando = typeof corpo.htmlAtual === 'string' && corpo.htmlAtual.trim().length > 0;
-  const pedidoTexto = refinando
-    ? 'Este é o HTML ATUAL do modelo, que NÃO ficou fiel o bastante à referência:\n\n' +
-      String(corpo.htmlAtual).slice(0, 200000) +
-      '\n\nCompare com a(s) imagem(ns) e devolva a versão CORRIGIDA, muito mais fiel — ' +
-      'conserte fundo, cores, posições e tamanhos que estiverem diferentes. ' +
-      'Mantenha os marcadores {{...}} já existentes sempre que possível.'
-    : (imagens.length > 1
-      ? 'Recrie a arte da PRIMEIRA imagem como modelo reutilizável; use as demais imagens ' +
-        'como referência extra de detalhes, variações e elementos da mesma identidade.'
-      : 'Recrie esta arte como modelo reutilizável seguindo as regras.');
-  const conteudo = [
-    ...imagens.map((m) => ({
-      type: 'image', source: { type: 'base64', media_type: 'image/' + m[1], data: m[2] },
-    })),
-    {
-      type: 'text',
-      text: pedidoTexto +
-        (corpo.observacoes ? '\nObservações da equipe: ' + String(corpo.observacoes).slice(0, 500) : ''),
-    },
-  ];
+  const observacoes = corpo.observacoes
+    ? '\nObservações da equipe: ' + String(corpo.observacoes).slice(0, 500) : '';
+  const blocoImagem = (m) => ({
+    type: 'image', source: { type: 'base64', media_type: 'image/' + m[1], data: m[2] },
+  });
 
-  const chamada = {
+  const chamada = (conteudo) => ({
     model: env.MODEL || MODELO_PADRAO,
     max_tokens: 8192,
     system: sistema,
@@ -650,39 +643,90 @@ REGRAS OBRIGATÓRIAS:
       },
     }],
     tool_choice: { type: 'tool', name: 'entregar_modelo' },
-  };
-
-  const respostaApi = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(chamada),
   });
-  if (!respostaApi.ok) {
-    const detalhe = await respostaApi.text().catch(() => '');
-    console.log('Erro da API (replicar):', respostaApi.status, detalhe.slice(0, 500));
-    return resposta({ erro: 'A IA não conseguiu replicar agora (HTTP ' + respostaApi.status + '). Tente de novo.' }, 502);
-  }
-  const dados = await respostaApi.json();
-  const bloco = (dados.content || []).find((b) => b.type === 'tool_use');
-  const saida = bloco && bloco.input;
-  if (!saida || typeof saida.html !== 'string' || !Array.isArray(saida.slots)) {
-    return resposta({ erro: 'A IA respondeu em um formato inesperado. Tente de novo.' }, 502);
-  }
+
   // remove qualquer coisa executável ou externa que tenha escapado
-  const html = saida.html
+  const sanear = (html) => String(html || '')
     .replace(/<\s*(script|link|iframe|object|embed)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, '')
     .replace(/<\s*(script|link|iframe|object|embed)[^>]*\/?\s*>/gi, '')
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '')
     .replace(/url\(\s*['"]?https?:[^)]*\)/gi, 'none');
-  return resposta({
-    html,
-    slots: saida.slots.slice(0, 24),
-    notas: String(saida.notas || '').slice(0, 400),
-  });
+
+  async function chamarIA(conteudo) {
+    const respostaApi = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(chamada(conteudo)),
+    });
+    if (!respostaApi.ok) {
+      const detalhe = await respostaApi.text().catch(() => '');
+      console.log('Erro da API (replicar):', respostaApi.status, detalhe.slice(0, 300));
+      throw new Error('HTTP ' + respostaApi.status);
+    }
+    const dados = await respostaApi.json();
+    const bloco = (dados.content || []).find((b) => b.type === 'tool_use');
+    const saida = bloco && bloco.input;
+    if (!saida || typeof saida.html !== 'string' || !Array.isArray(saida.slots)) {
+      throw new Error('formato inesperado');
+    }
+    return {
+      html: sanear(saida.html),
+      slots: saida.slots.slice(0, 24),
+      notas: String(saida.notas || '').slice(0, 400),
+    };
+  }
+
+  const refinando = typeof corpo.htmlAtual === 'string' && corpo.htmlAtual.trim().length > 0;
+  const textoRefino = (htmlBase) =>
+    'Este é o HTML ATUAL do modelo, que ainda NÃO está fiel o bastante à referência:\n\n' +
+    String(htmlBase).slice(0, 200000) +
+    '\n\nCompare com a imagem, elemento por elemento (fundo, cores, posições, tamanhos, ' +
+    'pesos de fonte), e devolva a versão CORRIGIDA, muito mais fiel. Mantenha os ' +
+    'marcadores {{...}} já existentes sempre que possível.' + observacoes;
+
+  try {
+    if (refinando) {
+      // refino manual do layout que a equipe está vendo no editor
+      const saida = await chamarIA([...imagens.map(blocoImagem), { type: 'text', text: textoRefino(corpo.htmlAtual) }]);
+      return resposta({ html: saida.html, layouts: [{ html: saida.html }], slots: saida.slots, notas: saida.notas });
+    }
+
+    // criação: CADA imagem vira um layout do modelo, com uma chamada dedicada
+    // seguida de um passe automático de refinamento contra a própria imagem
+    const resultados = await Promise.all(imagens.map(async (imagem) => {
+      const primeira = await chamarIA([blocoImagem(imagem), {
+        type: 'text',
+        text: 'Recrie esta arte como modelo reutilizável seguindo as regras.' + observacoes,
+      }]);
+      try {
+        const refinada = await chamarIA([blocoImagem(imagem), { type: 'text', text: textoRefino(primeira.html) }]);
+        return refinada.html ? refinada : primeira;
+      } catch (_) {
+        return primeira; // o refino falhou; a primeira versão já serve
+      }
+    }));
+
+    // os campos dos layouts se somam num vocabulário único do modelo
+    const slots = [];
+    for (const parcial of resultados) {
+      for (const slot of parcial.slots) {
+        if (slot && slot.key && !slots.some((s) => s.key === slot.key)) slots.push(slot);
+      }
+    }
+    const notas = resultados.map((r) => r.notas).filter(Boolean).join(' · ').slice(0, 400);
+    return resposta({
+      html: resultados[0].html,
+      layouts: resultados.map((r) => ({ html: r.html })),
+      slots: slots.slice(0, 24),
+      notas,
+    });
+  } catch (erro) {
+    return resposta({ erro: 'A IA não conseguiu replicar agora (' + erro.message + '). Tente de novo.' }, 502);
+  }
 }
 
 export default {
