@@ -33,6 +33,10 @@ const CONFIG = {
     },
   },
 
+  // Exibir os valores dos pacotes no app? (os preços mudam com frequência,
+  // então ficam ocultos — a cliente consulta o valor atual pelo WhatsApp)
+  MOSTRAR_PRECOS: false,
+
   // Falta (não compareceu) desconta sessão do pacote?
   FALTA_CONSOME: false,
 
@@ -51,6 +55,8 @@ const PROCEDIMENTOS = [
   { id: 'pedras',          nome: 'Terapia com Pedras Quentes',   cat: 'massagem' },
   { id: 'radiofrequencia', nome: 'Radiofrequência',              cat: 'aparelho' },
   { id: 'manta',           nome: 'Manta Térmica',                cat: 'aparelho' },
+  { id: 'estetica-manta',  nome: 'Estética + Manta Térmica',     cat: 'combinado' },
+  { id: 'massagem-manta',  nome: 'Massagem + Manta Térmica',     cat: 'combinado' },
 ];
 
 const PACOTES = [
@@ -73,7 +79,7 @@ const PACOTES = [
     desc: '10 radiofrequências + 10 massagens com manta térmica',
     pools: [
       { label: 'Radiofrequências', procs: ['radiofrequencia'], qtd: 10 },
-      { label: 'Massagens + manta', procs: ['estetica', 'drenagem', 'terapeutica', 'relaxante', 'pedras', 'manta'], qtd: 10 },
+      { label: 'Massagens + manta', procs: ['estetica', 'drenagem', 'terapeutica', 'relaxante', 'pedras', 'manta', 'massagem-manta', 'estetica-manta'], qtd: 10 },
     ],
   },
   {
@@ -81,7 +87,7 @@ const PACOTES = [
     desc: '10 drenagens + 10 estéticas com manta térmica',
     pools: [
       { label: 'Drenagens', procs: ['drenagem'], qtd: 10 },
-      { label: 'Estéticas + manta', procs: ['estetica', 'manta'], qtd: 10 },
+      { label: 'Estéticas + manta', procs: ['estetica', 'manta', 'estetica-manta'], qtd: 10 },
     ],
   },
   {
@@ -160,7 +166,12 @@ function moeda(v) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 function precoTexto(pacote) {
+  if (!CONFIG.MOSTRAR_PRECOS) return '';
   return pacote.preco ? moeda(pacote.preco) : 'valor sob consulta';
+}
+function nomePacote(pacote) {
+  const preco = precoTexto(pacote);
+  return pacote.nome + (preco ? ' — ' + preco : '');
 }
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1297,13 +1308,13 @@ function renderPlanos(cli) {
     '<div class="pacote-cartao">' +
       '<h3>' + esc(p.nome) + '</h3>' +
       '<p class="pacote-desc">' + esc(p.desc) + '</p>' +
-      (p.preco
+      (CONFIG.MOSTRAR_PRECOS && p.preco
         ? '<div class="pacote-preco">' + moeda(p.preco) + '</div>'
-        : '<div class="pacote-preco" style="font-size:1.15rem">Valor sob consulta</div>') +
+        : '<div class="mb-8"></div>') +
       '<a class="btn-zap" target="_blank" rel="noopener" href="' +
         esc(linkZap(CONFIG.WHATS_COMERCIAL,
           'Olá! Vim pelo app do Spa Vanessa Lima. Tenho interesse no pacote *' + p.nome + '* (' + p.desc + ')' +
-          (p.preco ? ' — ' + moeda(p.preco) + '. Pode me ajudar?' : '. Pode me passar o valor?'))) +
+          (CONFIG.MOSTRAR_PRECOS && p.preco ? ' — ' + moeda(p.preco) + '. Pode me ajudar?' : '. Pode me passar o valor e as condições?'))) +
       '">' + ICONE_ZAP + ' Comprar · Renovar</a>' +
     '</div>'
   ).join('');
@@ -1758,7 +1769,7 @@ function abrirNovaCliente() {
     '<div id="nc-pacotes">' +
       PACOTES.map((p) =>
         '<label class="linha-flex" style="justify-content:space-between;padding:9px 2px;border-bottom:1px solid var(--linha);cursor:pointer">' +
-          '<span style="flex:1">' + esc(p.nome) + ' — ' + precoTexto(p) + '</span>' +
+          '<span style="flex:1">' + esc(nomePacote(p)) + '</span>' +
           '<input type="checkbox" value="' + p.id + '" style="width:20px;height:20px;accent-color:var(--ouro);flex:none">' +
         '</label>').join('') +
     '</div>' +
@@ -1865,7 +1876,7 @@ function abrirFichaCliente(id) {
     '<div class="titulo-secao">Registrar compra / renovação</div>' +
     '<div class="linha-flex">' +
       '<select class="campo" id="ficha-pacote">' +
-        PACOTES.map((p) => '<option value="' + p.id + '">' + esc(p.nome) + ' — ' + precoTexto(p) + '</option>').join('') +
+        PACOTES.map((p) => '<option value="' + p.id + '">' + esc(nomePacote(p)) + '</option>').join('') +
       '</select>' +
     '</div>' +
     '<button class="btn-contorno mt-8" id="btn-ficha-comprar">Adicionar pacote à cliente</button>' +
@@ -1915,7 +1926,7 @@ function abrirFichaCliente(id) {
     const pacId = $('#ficha-pacote').value;
     const pac = pacotePorId(pacId);
     confirmar('Registrar compra',
-      'Adicionar <b>' + esc(pac.nome) + '</b> (' + precoTexto(pac) + ') para <b>' + esc(c.nome) + '</b>?',
+      'Adicionar <b>' + esc(nomePacote(pac)) + '</b> para <b>' + esc(c.nome) + '</b>?',
       [
         { rotulo: 'Confirmar compra', classe: 'btn', acao: () => {
             c.planos = c.planos || [];

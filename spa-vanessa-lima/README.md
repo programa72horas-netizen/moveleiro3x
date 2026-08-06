@@ -42,7 +42,12 @@ PWA — a cliente pode "instalar" na tela inicial do celular.
   pacote** e ajuste manual de saldo (+1/−1)
 - Cadastro de novas clientes
 
-## Valores cadastrados
+## Pacotes cadastrados
+
+> Os **valores não são exibidos no app** (mudam com frequência — a cliente
+> consulta pelo WhatsApp). Para voltar a exibi-los, mude
+> `MOSTRAR_PRECOS: true` no `app.js`. A tabela abaixo é só referência
+> interna dos preços gravados no código.
 
 | Pacote | Sessões | Valor |
 |---|---|---|
