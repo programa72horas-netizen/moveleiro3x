@@ -49,6 +49,9 @@ PWA — a cliente pode "instalar" na tela inicial do celular.
 | Protocolo Vanessa Lima | 60 sessões | R$ 4.250,00 |
 | Bye Celulite | 10 massagens + 10 radiofrequências + 10 mantas | R$ 2.570,00 |
 | Protocolo Transforme | 10 radiofrequências + 10 massagens com manta | R$ 1.570,00 |
+| Protocolo Recupera | 10 drenagens + 10 estéticas com manta | sob consulta |
+| Estética + Drenagem | 10 estéticas + 10 drenagens | sob consulta |
+| Manta Térmica | 10 sessões | sob consulta |
 | Drenagem Linfática | 10 sessões | R$ 850,00 |
 | Massagem Estética | 10 sessões | R$ 980,00 |
 | Protocolo Relaxante | 10 sessões | R$ 650,00 |

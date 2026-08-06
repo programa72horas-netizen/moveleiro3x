@@ -77,6 +77,22 @@ const PACOTES = [
     ],
   },
   {
+    id: 'recupera', nome: 'Protocolo Recupera', preco: null,
+    desc: '10 drenagens + 10 estéticas com manta térmica',
+    pools: [
+      { label: 'Drenagens', procs: ['drenagem'], qtd: 10 },
+      { label: 'Estéticas + manta', procs: ['estetica', 'manta'], qtd: 10 },
+    ],
+  },
+  {
+    id: 'estetica-drenagem', nome: 'Estética + Drenagem', preco: null,
+    desc: '10 massagens estéticas + 10 drenagens linfáticas',
+    pools: [
+      { label: 'Estéticas', procs: ['estetica'], qtd: 10 },
+      { label: 'Drenagens', procs: ['drenagem'], qtd: 10 },
+    ],
+  },
+  {
     id: 'drenagem10', nome: 'Drenagem Linfática', preco: 850,
     desc: '10 sessões de drenagem linfática',
     pools: [{ label: 'Sessões', procs: ['drenagem'], qtd: 10 }],
@@ -90,6 +106,11 @@ const PACOTES = [
     id: 'relax10', nome: 'Protocolo Relaxante', preco: 650,
     desc: '10 sessões · relaxante ou pedras quentes',
     pools: [{ label: 'Sessões', procs: ['relaxante', 'pedras'], qtd: 10 }],
+  },
+  {
+    id: 'manta10', nome: 'Manta Térmica', preco: null,
+    desc: '10 sessões de manta térmica',
+    pools: [{ label: 'Sessões', procs: ['manta'], qtd: 10 }],
   },
 ];
 
@@ -132,6 +153,9 @@ function fmtDataCurta(iso) {
 }
 function moeda(v) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function precoTexto(pacote) {
+  return pacote.preco ? moeda(pacote.preco) : 'valor sob consulta';
 }
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1268,10 +1292,13 @@ function renderPlanos(cli) {
     '<div class="pacote-cartao">' +
       '<h3>' + esc(p.nome) + '</h3>' +
       '<p class="pacote-desc">' + esc(p.desc) + '</p>' +
-      '<div class="pacote-preco">' + moeda(p.preco) + '</div>' +
+      (p.preco
+        ? '<div class="pacote-preco">' + moeda(p.preco) + '</div>'
+        : '<div class="pacote-preco" style="font-size:1.15rem">Valor sob consulta</div>') +
       '<a class="btn-zap" target="_blank" rel="noopener" href="' +
         esc(linkZap(CONFIG.WHATS_COMERCIAL,
-          'Olá! Vim pelo app do Spa Vanessa Lima. Tenho interesse no pacote *' + p.nome + '* (' + p.desc + ') — ' + moeda(p.preco) + '. Pode me ajudar?')) +
+          'Olá! Vim pelo app do Spa Vanessa Lima. Tenho interesse no pacote *' + p.nome + '* (' + p.desc + ')' +
+          (p.preco ? ' — ' + moeda(p.preco) + '. Pode me ajudar?' : '. Pode me passar o valor?'))) +
       '">' + ICONE_ZAP + ' Comprar · Renovar</a>' +
     '</div>'
   ).join('');
@@ -1726,7 +1753,7 @@ function abrirNovaCliente() {
     '<div id="nc-pacotes">' +
       PACOTES.map((p) =>
         '<label class="linha-flex" style="justify-content:space-between;padding:9px 2px;border-bottom:1px solid var(--linha);cursor:pointer">' +
-          '<span style="flex:1">' + esc(p.nome) + ' — ' + moeda(p.preco) + '</span>' +
+          '<span style="flex:1">' + esc(p.nome) + ' — ' + precoTexto(p) + '</span>' +
           '<input type="checkbox" value="' + p.id + '" style="width:20px;height:20px;accent-color:var(--ouro);flex:none">' +
         '</label>').join('') +
     '</div>' +
@@ -1833,7 +1860,7 @@ function abrirFichaCliente(id) {
     '<div class="titulo-secao">Registrar compra / renovação</div>' +
     '<div class="linha-flex">' +
       '<select class="campo" id="ficha-pacote">' +
-        PACOTES.map((p) => '<option value="' + p.id + '">' + esc(p.nome) + ' — ' + moeda(p.preco) + '</option>').join('') +
+        PACOTES.map((p) => '<option value="' + p.id + '">' + esc(p.nome) + ' — ' + precoTexto(p) + '</option>').join('') +
       '</select>' +
     '</div>' +
     '<button class="btn-contorno mt-8" id="btn-ficha-comprar">Adicionar pacote à cliente</button>' +
@@ -1883,7 +1910,7 @@ function abrirFichaCliente(id) {
     const pacId = $('#ficha-pacote').value;
     const pac = pacotePorId(pacId);
     confirmar('Registrar compra',
-      'Adicionar <b>' + esc(pac.nome) + '</b> (' + moeda(pac.preco) + ') para <b>' + esc(c.nome) + '</b>?',
+      'Adicionar <b>' + esc(pac.nome) + '</b> (' + precoTexto(pac) + ') para <b>' + esc(c.nome) + '</b>?',
       [
         { rotulo: 'Confirmar compra', classe: 'btn', acao: () => {
             c.planos = c.planos || [];
