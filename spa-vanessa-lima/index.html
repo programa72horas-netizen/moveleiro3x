@@ -298,6 +298,18 @@
     <input class="campo" id="enc-data" type="date">
     <label class="rotulo" for="enc-hora">Horário</label>
     <select class="campo" id="enc-hora"></select>
+    <label class="linha-flex mt-14" style="cursor:pointer;justify-content:space-between">
+      <span style="flex:1">
+        <strong style="font-weight:500">Repetir toda semana</strong><br>
+        <small class="texto-suave">Agenda a série no mesmo dia e horário, semana a semana.</small>
+      </span>
+      <input type="checkbox" id="enc-rec" style="width:22px;height:22px;accent-color:var(--ouro);flex:none">
+    </label>
+    <div id="enc-rec-opcoes" hidden>
+      <label class="rotulo" for="enc-rec-qtd">Quantas sessões?</label>
+      <input class="campo" id="enc-rec-qtd" type="number" min="2" max="60" inputmode="numeric">
+      <p class="texto-suave mt-8" id="enc-rec-dica" style="font-size:.84rem"></p>
+    </div>
     <button class="btn mt-20" id="btn-enc-salvar">Agendar</button>
   </div>
 </div>

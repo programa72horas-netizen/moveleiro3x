@@ -69,6 +69,14 @@ const PACOTES = [
     ],
   },
   {
+    id: 'transforme', nome: 'Protocolo Transforme', preco: 1570,
+    desc: '10 radiofrequências + 10 massagens com manta térmica',
+    pools: [
+      { label: 'Radiofrequências', procs: ['radiofrequencia'], qtd: 10 },
+      { label: 'Massagens + manta', procs: ['estetica', 'drenagem', 'terapeutica', 'relaxante', 'pedras', 'manta'], qtd: 10 },
+    ],
+  },
+  {
     id: 'drenagem10', nome: 'Drenagem Linfática', preco: 850,
     desc: '10 sessões de drenagem linfática',
     pools: [{ label: 'Sessões', procs: ['drenagem'], qtd: 10 }],
@@ -1575,8 +1583,25 @@ function abrirEncaixe() {
     .map((p) => '<option value="' + p.id + '">' + esc(p.nome) + '</option>').join('');
   $('#enc-data').min = hojeISO();
   $('#enc-data').value = admDia >= hojeISO() ? admDia : hojeISO();
+  $('#enc-rec').checked = false;
+  $('#enc-rec-opcoes').hidden = true;
+  $('#enc-rec-qtd').value = '';
   atualizarHorasEncaixe();
   abrirModal('modal-encaixe');
+}
+
+function atualizarRecEncaixe() {
+  const marcado = $('#enc-rec').checked;
+  $('#enc-rec-opcoes').hidden = !marcado;
+  if (!marcado) return;
+  const cli = clientePorId($('#enc-cliente').value);
+  const procId = $('#enc-proc').value;
+  const rest = cli && procId ? restantesParaProc(cli, procId) : 0;
+  const campo = $('#enc-rec-qtd');
+  if (!campo.value) campo.value = Math.max(2, Math.min(rest || 4, 60));
+  $('#enc-rec-dica').innerHTML = rest > 0
+    ? 'O plano da cliente cobre <b>' + rest + '</b> ' + (rest === 1 ? 'sessão' : 'sessões') + ' deste procedimento.'
+    : 'Sem saldo no plano para este procedimento — as sessões ficarão avulsas.';
 }
 
 function atualizarHorasEncaixe() {
@@ -1603,17 +1628,57 @@ function salvarEncaixe() {
   if (!diaAberto(deISO(data))) { toast('O spa não abre neste dia (' + DIAS_LONGO[deISO(data).getDay()] + ').'); return; }
   if (deISO(data, hora) <= new Date()) { toast('Esse horário já passou — escolha outro.'); return; }
   if (!horarioLivre(data, hora)) { toast('Este horário acabou de ser ocupado.'); return; }
-  const cob = coberturaParaProc(cli, procId);
-  salvarAgendamento({
-    id: uid(), clienteId, procId, data, hora,
-    status: 'agendada',
-    planoId: cob ? cob.plano.id : null,
-    poolIx: cob ? cob.poolIx : null,
-    serieId: null, criadoEm: agora(),
+
+  const recorrente = $('#enc-rec').checked;
+  let qtd = 1;
+  if (recorrente) {
+    qtd = parseInt($('#enc-rec-qtd').value, 10);
+    if (!qtd || qtd < 2) { toast('Para recorrência, informe 2 ou mais sessões.'); return; }
+    qtd = Math.min(qtd, 60);
+  }
+
+  const { datas, puladas } = gerarDatasSerie(data, hora, qtd);
+  if (!datas.length) { toast('Não encontramos horários livres — tente outro horário.'); return; }
+
+  // simula o consumo dos créditos sessão a sessão
+  const tally = {};
+  const itens = datas.map((ds) => {
+    const cob = coberturaParaProc(cli, procId, tally);
+    if (cob) tally[cob.chave] = (tally[cob.chave] || 0) + 1;
+    return { data: ds, cobertura: cob };
   });
-  fecharModal('modal-encaixe');
-  toast('Agendado para ' + fmtDataCurta(data) + ' às ' + hora + ' ✓');
-  renderAdmin();
+
+  const criar = () => {
+    const serieId = itens.length > 1 ? uid() : null;
+    for (const it of itens) {
+      salvarAgendamento({
+        id: uid(), clienteId, procId, data: it.data, hora,
+        status: 'agendada',
+        planoId: it.cobertura ? it.cobertura.plano.id : null,
+        poolIx: it.cobertura ? it.cobertura.poolIx : null,
+        serieId, criadoEm: agora(),
+      });
+    }
+    fecharModal('modal-encaixe');
+    toast(itens.length > 1
+      ? itens.length + ' sessões agendadas (' + fmtDataCurta(datas[0]) + ' a ' + fmtDataCurta(datas[datas.length - 1]) + ') ✓'
+      : 'Agendado para ' + fmtDataCurta(data) + ' às ' + hora + ' ✓');
+    renderAdmin();
+  };
+
+  if (itens.length === 1) { criar(); return; }
+
+  const avulsas = itens.filter((it) => !it.cobertura).length;
+  confirmar('Confirmar série',
+    '<b>' + esc(cli.nome) + '</b> · ' + esc(nomeProc(procId)) + '<br>' +
+    todoDia(deISO(data).getDay()) + ' às <b>' + esc(hora) + '</b> · <b>' + itens.length + ' sessões</b> (' +
+    fmtDataCurta(datas[0]) + ' a ' + fmtDataCurta(datas[datas.length - 1]) + ')' +
+    (puladas.length ? '<br>Pulamos ' + puladas.length + ' semana' + (puladas.length > 1 ? 's' : '') + ' com horário lotado e compensamos no final.' : '') +
+    (avulsas ? '<br><b>' + avulsas + '</b> ' + (avulsas === 1 ? 'sessão ficará avulsa' : 'sessões ficarão avulsas') + ' (sem saldo no plano).' : ''),
+    [
+      { rotulo: 'Confirmar série', classe: 'btn', acao: criar },
+      { rotulo: 'Voltar', classe: 'btn-suave', acao: null },
+    ]);
 }
 
 /* --- lista e ficha de clientes --- */
@@ -1959,6 +2024,9 @@ function ligarEventos() {
   $('#adm-dia-hoje').addEventListener('click', () => { admDia = hojeISO(); renderAdmAgenda(); });
   $('#btn-encaixe').addEventListener('click', abrirEncaixe);
   $('#enc-data').addEventListener('change', atualizarHorasEncaixe);
+  $('#enc-rec').addEventListener('change', atualizarRecEncaixe);
+  $('#enc-cliente').addEventListener('change', () => { $('#enc-rec-qtd').value = ''; atualizarRecEncaixe(); });
+  $('#enc-proc').addEventListener('change', () => { $('#enc-rec-qtd').value = ''; atualizarRecEncaixe(); });
   $('#btn-enc-salvar').addEventListener('click', salvarEncaixe);
   $('#adm-busca').addEventListener('input', renderAdmClientes);
 

@@ -36,7 +36,7 @@ PWA — a cliente pode "instalar" na tela inicial do celular.
   WhatsApp da cliente com a mensagem pronta
 - **Renovações**: lista automática de clientes com 2 sessões ou menos no plano
 - **Agenda do dia** com ✓ concluir, falta e cancelar, além de **encaixe**
-  (novo agendamento feito pela recepção)
+  (novo agendamento feito pela recepção, avulso ou **recorrente semanal**)
 - **Ficha da cliente**: frequência nos últimos 30 dias, sessões realizadas,
   **sessões restantes**, últimas sessões, **registrar compra/renovação de
   pacote** e ajuste manual de saldo (+1/−1)
@@ -48,6 +48,7 @@ PWA — a cliente pode "instalar" na tela inicial do celular.
 |---|---|---|
 | Protocolo Vanessa Lima | 60 sessões | R$ 4.250,00 |
 | Bye Celulite | 10 massagens + 10 radiofrequências + 10 mantas | R$ 2.570,00 |
+| Protocolo Transforme | 10 radiofrequências + 10 massagens com manta | R$ 1.570,00 |
 | Drenagem Linfática | 10 sessões | R$ 850,00 |
 | Massagem Estética | 10 sessões | R$ 980,00 |
 | Protocolo Relaxante | 10 sessões | R$ 650,00 |
