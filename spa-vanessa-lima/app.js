@@ -85,8 +85,8 @@ const PACOTES = [
     ],
   },
   {
-    id: 'estetica-drenagem', nome: 'Estética + Drenagem', preco: null,
-    desc: '10 massagens estéticas + 10 drenagens linfáticas',
+    id: 'estetica-drenagem', nome: 'Estética + Drenagem', preco: 1250,
+    desc: '20 sessões · 10 massagens estéticas + 10 drenagens linfáticas',
     pools: [
       { label: 'Estéticas', procs: ['estetica'], qtd: 10 },
       { label: 'Drenagens', procs: ['drenagem'], qtd: 10 },
@@ -103,12 +103,17 @@ const PACOTES = [
     pools: [{ label: 'Sessões', procs: ['estetica'], qtd: 10 }],
   },
   {
+    id: 'radio10', nome: 'Radiofrequência', preco: 800,
+    desc: '10 sessões de radiofrequência',
+    pools: [{ label: 'Sessões', procs: ['radiofrequencia'], qtd: 10 }],
+  },
+  {
     id: 'relax10', nome: 'Protocolo Relaxante', preco: 650,
     desc: '10 sessões · relaxante ou pedras quentes',
     pools: [{ label: 'Sessões', procs: ['relaxante', 'pedras'], qtd: 10 }],
   },
   {
-    id: 'manta10', nome: 'Manta Térmica', preco: null,
+    id: 'manta10', nome: 'Manta Térmica', preco: 800,
     desc: '10 sessões de manta térmica',
     pools: [{ label: 'Sessões', procs: ['manta'], qtd: 10 }],
   },
