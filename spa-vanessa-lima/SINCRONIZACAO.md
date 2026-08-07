@@ -22,16 +22,21 @@ pessoais — só códigos internos, datas e procedimentos.
 
 1. Na planilha, abra **Extensões → Apps Script**
 2. Apague o que estiver no editor e cole o código abaixo
-3. **Troque `TROQUE-AQUI` pelo mesmo código de acesso da equipe usado no app**
+3. **Troque `TROQUE-AQUI` pelo código da recepção e `TROQUE-MASSO` pelo
+   código das massoterapeutas usados no app**
 4. Salve (ícone de disquete)
 
 ```js
-// ====== Spa Vanessa Lima — sincronização do app (v2) ======
+// ====== Spa Vanessa Lima — sincronização do app (v3) ======
 const ABA = 'dados';
 
-// ⚠️ O MESMO código de acesso da equipe usado no app.
-// É ele que libera a lista de clientes só para a recepção.
+// ⚠️ O MESMO código de acesso da recepção usado no app.
+// É ele que libera a lista completa de clientes.
 const CHAVE_EQUIPE = 'TROQUE-AQUI';
+
+// ⚠️ O MESMO código das massoterapeutas usado no app.
+// Libera apenas os NOMES das clientes (sem telefone, e-mail ou planos).
+const CHAVE_MASSO = 'TROQUE-MASSO';
 
 // limites anti-abuso
 const MAX_REGISTROS_POR_ENVIO = 300;
@@ -57,6 +62,7 @@ function doGet(e) {
   const chave = (e && e.parameter && e.parameter.chave) || '';
   const whats = String((e && e.parameter && e.parameter.whats) || '').replace(/\D/g, '');
   const equipe = chave !== '' && chave === CHAVE_EQUIPE;
+  const masso = chave !== '' && chave === CHAVE_MASSO;
 
   const linhas = aba_().getDataRange().getValues().slice(1);
   const saida = { clientes: [], agendamentos: [] };
@@ -65,9 +71,12 @@ function doGet(e) {
     try {
       const reg = JSON.parse(json);
       if (tipo === 'agendamento') saida.agendamentos.push(reg);
-      // cadastros: tudo para a equipe; só o próprio para a cliente
-      if (tipo === 'cliente' && (equipe || (whats && reg.whats === whats))) {
-        saida.clientes.push(reg);
+      if (tipo === 'cliente') {
+        // tudo para a recepção; só id + nome para as massoterapeutas;
+        // só o próprio cadastro para a cliente
+        if (equipe) saida.clientes.push(reg);
+        else if (masso) saida.clientes.push({ id: reg.id, nome: reg.nome, up: reg.up });
+        else if (whats && reg.whats === whats) saida.clientes.push(reg);
       }
     } catch (err) {}
   }
