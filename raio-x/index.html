@@ -498,7 +498,6 @@
 
       <div class="result-actions">
         <a class="btn btn-primary btn-block" id="btn-compartilhar" target="_blank" rel="noopener">📲 Compartilhar meu resultado</a>
-        <a class="btn btn-ghost btn-block" id="btn-ingresso">🎟 Garantir meu ingresso digital</a>
       </div>
       <div class="result-refazer">
         <button class="btn btn-ghost" id="btn-refazer">Refazer o Raio-X</button>
@@ -522,8 +521,6 @@
     // Mesma planilha do pré-check-in (as respostas caem na aba "Raio-X" —
     // veja raio-x/PLANILHA.md para atualizar o robô da planilha)
     PLANILHA_URL: 'https://script.google.com/macros/s/AKfycbw8_8zZjlst8Y4gXxdfh5L85UIS_CdaLh-mWtBZde9rzCZojZEdbsBuMpN0b0LGYFIb_g/exec',
-    // Link do app de pré-check-in (ingresso digital com QR Code)
-    LINK_PRECHECKIN: '../',
   };
 
   /* ------------------------- Perguntas ------------------------- */
@@ -827,7 +824,6 @@
       'Pilar que mais vaza: ' + DIAGNOSTICOS[r.fraco].nome + '\n\n' +
       'Faça o seu antes do evento: ' + link;
     $('#btn-compartilhar').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
-    $('#btn-ingresso').href = CONFIG.LINK_PRECHECKIN;
   }
 
   $('#btn-refazer').addEventListener('click', () => {
