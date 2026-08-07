@@ -42,6 +42,11 @@ PWA — a cliente pode "instalar" na tela inicial do celular.
   pacote** e ajuste manual de saldo (+1/−1)
 - Cadastro de novas clientes
 
+### Para as massoterapeutas
+- Código de acesso próprio (mesmo botão "Acesso da equipe") que abre a
+  **agenda somente para visualização**: horário, cliente e procedimento,
+  navegando pelos dias — sem editar, sem telefones, sem ficha
+
 ## Pacotes cadastrados
 
 > Os **valores não são exibidos no app** (mudam com frequência — a cliente

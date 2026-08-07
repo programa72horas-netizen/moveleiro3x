@@ -18,6 +18,10 @@ const CONFIG = {
   // rode  await gerarHashPin('NovoCodigo')  — cole o resultado aqui.
   PIN_EQUIPE_HASH: '2ae48495678af6fd98c5c36afa297fc3bd32eca791711ee7ab5327ed97cc92c6',
 
+  // Código das massoterapeutas (mesmo botão "Acesso da equipe"): abre a
+  // agenda somente para visualização — sem editar, sem telefones, sem ficha.
+  PIN_MASSO_HASH: '2449d49c3aa1ef20b3df66ccc67b0b3bbc55a144bcad900cdb1ddfe7ec534bff',
+
   // Funcionamento do spa — vagas por horário em cada dia da semana
   // (1=segunda … 6=sábado; dia ausente = fechado; o número é quantas
   //  clientes podem agendar no MESMO horário)
@@ -302,7 +306,7 @@ async function sincronizar() {
        uma cliente recebe apenas o próprio cadastro. Os agendamentos não
        carregam dados pessoais (só ids, datas e procedimentos). */
     let url = CONFIG.SYNC_URL + '?t=' + agora();
-    if (SESSAO && SESSAO.admin && SESSAO.chave) {
+    if (SESSAO && (SESSAO.admin || SESSAO.masso) && SESSAO.chave) {
       url += '&chave=' + encodeURIComponent(SESSAO.chave);
     } else {
       const cli = clienteLogado();
@@ -403,6 +407,12 @@ function mesclar(locais, remotos, tipo) {
       const base = (r.up || 0) > (l.up || 0) ? r : l;
       const outro = base === r ? l : r;
       const unido = Object.assign({}, base, {
+        // campos vazios não apagam os preenchidos (registros resumidos
+        // da visão das massoterapeutas trazem só id + nome)
+        nome: base.nome || outro.nome,
+        whats: base.whats || outro.whats,
+        email: base.email || outro.email,
+        nascimento: base.nascimento || outro.nascimento,
         planos: unirPlanos(base.planos, outro.planos),
         onboarded: !!(base.onboarded || outro.onboarded),
       });
@@ -633,6 +643,7 @@ function renderizarVista(vista) {
 
 function renderizarTudo() {
   if (SESSAO && SESSAO.admin) { renderAdmin(); return; }
+  if (SESSAO && SESSAO.masso) { renderMasso(); return; }
   if (SESSAO && SESSAO.clienteId && !clienteLogado()) { sair(); return; } // perfil arquivado noutro aparelho
   const cli = clienteLogado();
   if (cli && $('#tela-app').classList.contains('ativa')) {
@@ -822,6 +833,13 @@ async function verificarPin() {
     // sincronização (conferida pelo Apps Script, fora deste código público)
     definirSessao({ admin: true, chave: digitado });
     abrirAdmin();
+  } else if (CONFIG.PIN_MASSO_HASH && hash === CONFIG.PIN_MASSO_HASH) {
+    localStorage.removeItem(CHAVE_TENTATIVAS);
+    fecharModal('modal-pin');
+    // massoterapeuta: agenda somente leitura; a chave libera só os nomes
+    // das clientes na sincronização (Apps Script, CHAVE_MASSO)
+    definirSessao({ masso: true, chave: digitado });
+    abrirMasso();
   } else {
     trava.n = (trava.n || 0) + 1;
     if (trava.n >= 5) { trava.ate = agora() + 5 * 60000; trava.n = 0; }
@@ -1982,6 +2000,51 @@ function abrirFichaCliente(id) {
 }
 
 /* ------------------------------------------------------------
+   MASSOTERAPEUTAS — agenda somente para visualização
+   ------------------------------------------------------------ */
+let massoDia = hojeISO();
+
+function abrirMasso() {
+  massoDia = hojeISO();
+  mostrarTela('tela-masso');
+  renderMasso();
+}
+
+function renderMasso() {
+  const d = deISO(massoDia);
+  const hoje = massoDia === hojeISO();
+  $('#masso-dia-titulo').textContent = (hoje ? 'Hoje · ' : '') + DIAS_LONGO[d.getDay()] + ', ' + d.getDate() + ' ' + MESES_CURTO[d.getMonth()];
+  $('#masso-dia-hoje').style.display = hoje ? 'none' : '';
+
+  const doDia = DB.agendamentos
+    .filter((a) => a.data === massoDia && a.status !== 'cancelada')
+    .sort((a, b) => a.hora.localeCompare(b.hora));
+
+  const area = $('#masso-agenda-lista');
+  if (!doDia.length) {
+    area.innerHTML = '<div class="vazio">Nenhum atendimento neste dia.</div>';
+    return;
+  }
+  area.innerHTML = doDia.map((a) => {
+    const c = clientePorId(a.clienteId);
+    const tag = a.status === 'concluida' ? '<span class="tag verde">realizada</span>'
+      : a.status === 'falta' ? '<span class="tag vermelho">falta</span>' : '';
+    return '<div class="sessao-item">' +
+      '<div class="sessao-data" style="min-width:46px"><div class="dia" style="font-size:1.15rem">' + esc(a.hora) + '</div></div>' +
+      '<div class="sessao-info"><strong>' + esc(c && c.nome ? c.nome : 'Cliente') + '</strong>' +
+      '<small>' + esc(nomeProc(a.procId)) + '</small></div>' + tag +
+    '</div>';
+  }).join('');
+}
+
+function mudarDiaMasso(delta) {
+  const d = deISO(massoDia);
+  d.setDate(d.getDate() + delta);
+  massoDia = dataISO(d);
+  renderMasso();
+}
+
+/* ------------------------------------------------------------
    Logotipo 3D interativo (tela de entrada)
    ------------------------------------------------------------ */
 function iniciarLogo3D() {
@@ -2059,6 +2122,12 @@ function ligarEventos() {
   $('#aba-proximas').addEventListener('click', () => mostrarAbaSessoes('proximas'));
   $('#aba-historico').addEventListener('click', () => mostrarAbaSessoes('historico'));
 
+  // massoterapeutas
+  $('#btn-masso-sair').addEventListener('click', () => { definirSessao(null); sair(); });
+  $('#masso-dia-ant').addEventListener('click', () => mudarDiaMasso(-1));
+  $('#masso-dia-prox').addEventListener('click', () => mudarDiaMasso(1));
+  $('#masso-dia-hoje').addEventListener('click', () => { massoDia = hojeISO(); renderMasso(); });
+
   // admin
   $('#btn-adm-sair').addEventListener('click', () => { definirSessao(null); sair(); });
   $$('[data-adm]').forEach((b) => b.addEventListener('click', () => { admVista = b.dataset.adm; renderAdmin(); }));
@@ -2092,6 +2161,8 @@ function iniciar() {
   // restaura a sessão do aparelho
   if (SESSAO && SESSAO.admin) {
     abrirAdmin();
+  } else if (SESSAO && SESSAO.masso) {
+    abrirMasso();
   } else {
     const cli = clienteLogado();
     if (cli) {
